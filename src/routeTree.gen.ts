@@ -9,8 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UploadRouteImport } from './routes/upload'
+import { Route as ReviewRouteImport } from './routes/review'
+import { Route as PacketRouteImport } from './routes/packet'
+import { Route as ConfirmRouteImport } from './routes/confirm'
+import { Route as CalculationRouteImport } from './routes/calculation'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UploadRoute = UploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewRoute = ReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PacketRoute = PacketRouteImport.update({
+  id: '/packet',
+  path: '/packet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmRoute = ConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalculationRoute = CalculationRouteImport.update({
+  id: '/calculation',
+  path: '/calculation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +49,96 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/calculation': typeof CalculationRoute
+  '/confirm': typeof ConfirmRoute
+  '/packet': typeof PacketRoute
+  '/review': typeof ReviewRoute
+  '/upload': typeof UploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/calculation': typeof CalculationRoute
+  '/confirm': typeof ConfirmRoute
+  '/packet': typeof PacketRoute
+  '/review': typeof ReviewRoute
+  '/upload': typeof UploadRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/calculation': typeof CalculationRoute
+  '/confirm': typeof ConfirmRoute
+  '/packet': typeof PacketRoute
+  '/review': typeof ReviewRoute
+  '/upload': typeof UploadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/calculation'
+    | '/confirm'
+    | '/packet'
+    | '/review'
+    | '/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/calculation' | '/confirm' | '/packet' | '/review' | '/upload'
+  id:
+    | '__root__'
+    | '/'
+    | '/calculation'
+    | '/confirm'
+    | '/packet'
+    | '/review'
+    | '/upload'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CalculationRoute: typeof CalculationRoute
+  ConfirmRoute: typeof ConfirmRoute
+  PacketRoute: typeof PacketRoute
+  ReviewRoute: typeof ReviewRoute
+  UploadRoute: typeof UploadRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/upload': {
+      id: '/upload'
+      path: '/upload'
+      fullPath: '/upload'
+      preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review': {
+      id: '/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof ReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/packet': {
+      id: '/packet'
+      path: '/packet'
+      fullPath: '/packet'
+      preLoaderRoute: typeof PacketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirm': {
+      id: '/confirm'
+      path: '/confirm'
+      fullPath: '/confirm'
+      preLoaderRoute: typeof ConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calculation': {
+      id: '/calculation'
+      path: '/calculation'
+      fullPath: '/calculation'
+      preLoaderRoute: typeof CalculationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +151,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CalculationRoute: CalculationRoute,
+  ConfirmRoute: ConfirmRoute,
+  PacketRoute: PacketRoute,
+  ReviewRoute: ReviewRoute,
+  UploadRoute: UploadRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

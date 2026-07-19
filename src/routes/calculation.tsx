@@ -172,7 +172,7 @@ function CalculationPage() {
 
               <dt className="text-muted-foreground">Formula</dt>
               <dd className="font-mono text-[0.85rem]">
-                {currency(result.annual)} {belowOrEqual ? "≤" : ">"} {currency(threshold.amount)}
+                {currency(result.annual)} {belowOrEqual ? "≤" : "≥"} {currency(threshold.amount)}
               </dd>
 
               <dt className="text-muted-foreground">Source</dt>

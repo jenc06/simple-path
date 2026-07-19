@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, Info } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 
@@ -172,7 +172,7 @@ function CalculationPage() {
 
               <dt className="text-muted-foreground">Formula</dt>
               <dd className="font-mono text-[0.85rem]">
-                {currency(result.annual)} {belowOrEqual ? "≤" : ">"} {currency(threshold.amount)}
+                {currency(result.annual)} {belowOrEqual ? "≤" : "≥"} {currency(threshold.amount)}
               </dd>
 
               <dt className="text-muted-foreground">Source</dt>
@@ -184,7 +184,9 @@ function CalculationPage() {
 
             <div className="mt-3 flex items-center gap-3" aria-hidden="true">
               <span className="text-2xl font-semibold">{currency(result.annual)}</span>
-              <ArrowRight className="h-5 w-5 text-muted-foreground" />
+              <span className="text-2xl font-semibold text-muted-foreground" aria-hidden="true">
+                {belowOrEqual ? "≤" : "≥"}
+              </span>
               <span className="text-2xl font-semibold">{currency(threshold.amount)}</span>
             </div>
 

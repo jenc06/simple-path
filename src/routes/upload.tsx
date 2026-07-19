@@ -6,9 +6,11 @@ import {
   DATE_CUTOFF,
   DOC_LABELS,
   TODAY,
+  mockFieldsFor,
   useSession,
   type DocType,
 } from "@/lib/session-store";
+
 
 export const Route = createFileRoute("/upload")({
   head: () => ({
@@ -55,6 +57,7 @@ function UploadPage() {
     documentDate: string,
     status: "uploaded" | "expired",
   ) {
+    const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setSession((s) => ({
       ...s,
       docs: [
@@ -62,16 +65,17 @@ function UploadPage() {
         // Only replace a prior "skipped" placeholder for this type.
         ...s.docs.filter((d) => !(d.type === type && d.status === "skipped")),
         {
-          id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          id,
           type,
           fileName,
           documentDate,
           status,
-          fields: [],
+          fields: mockFieldsFor(type, id),
         },
       ],
     }));
   }
+
 
   function openFilePicker() {
     fileInputRef.current?.click();

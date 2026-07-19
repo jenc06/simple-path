@@ -49,20 +49,20 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
           <button
             type="button"
             onClick={() => setConfirm("restart")}
-            className="inline-flex h-11 min-w-11 items-center justify-center rounded-md border border-input px-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-11 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Restart session"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only sm:not-sr-only sm:ml-1.5">Restart</span>
+            <span>Restart</span>
           </button>
           <button
             type="button"
             onClick={() => setConfirm("delete")}
-            className="inline-flex h-11 min-w-11 items-center justify-center rounded-md border border-destructive/40 px-2 text-sm font-medium text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
+            className="inline-flex h-11 items-center gap-1.5 rounded-md border border-destructive/40 px-3 text-sm font-medium text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
             aria-label="Delete session and all data"
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only sm:not-sr-only sm:ml-1.5">Delete</span>
+            <span>Delete</span>
           </button>
         </div>
       </header>

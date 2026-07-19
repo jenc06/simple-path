@@ -226,6 +226,16 @@ function UploadPage() {
           >
             I do not have this
           </button>
+          {stepIdx > 0 && (
+            <button
+              type="button"
+              onClick={prev}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Go back to the previous document"
+            >
+              Back to previous document
+            </button>
+          )}
         </div>
       </section>
 

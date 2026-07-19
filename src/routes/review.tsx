@@ -33,9 +33,9 @@ function ReviewPage() {
 
   const merged = useMemo(() => mergedFields(session), [session]);
 
-  // Stable order: unconfirmed first (preserving original order), confirmed at bottom.
-  const orderedBasic = useMemo(() => sortByConfirmation(merged.filter((m) => m.category === "basic")), [merged]);
-  const orderedCalc = useMemo(() => sortByConfirmation(merged.filter((m) => m.category === "calculation")), [merged]);
+  // Preserve original order — confirmed cards stay in place; we just auto-scroll to the next unconfirmed one.
+  const orderedBasic = useMemo(() => merged.filter((m) => m.category === "basic"), [merged]);
+  const orderedCalc = useMemo(() => merged.filter((m) => m.category === "calculation"), [merged]);
 
   const basicDone = orderedBasic.every((m) => m.confirmed);
   const calcDone = orderedCalc.every((m) => m.confirmed);

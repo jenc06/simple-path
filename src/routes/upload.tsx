@@ -238,10 +238,10 @@ function UploadPage() {
             type="button"
             onClick={openFilePicker}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={`Upload a file for ${DOC_LABELS[currentType]}`}
+            aria-label={`Upload one or more files for ${DOC_LABELS[currentType]}`}
           >
             <Upload className="h-4 w-4" aria-hidden="true" />
-            Upload a file
+            Upload file(s)
           </button>
           <button
             type="button"

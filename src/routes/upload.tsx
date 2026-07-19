@@ -2,14 +2,17 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, Check, FileText, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
+import { extractDocumentFields, scanDocument, type ScanResult } from "@/lib/extraction-backend";
 import {
   DATE_CUTOFF,
+  DOCUMENT_AGE_LIMIT_DAYS,
   DOC_LABELS,
   TODAY,
-  mockFieldsFor,
   useSession,
   type DocType,
+  type ExtractedField,
 } from "@/lib/session-store";
+import type { EvidenceChunk } from "@/lib/evidence-types";
 
 export const Route = createFileRoute("/upload")({
   head: () => ({
@@ -41,16 +44,34 @@ const HELPER_TEXT: Partial<Record<DocType, string[]>> = {
   gig_statement: ["Statement month", "Gross receipts", "Platform fees"],
 };
 
+function docLabel(type: DocType) {
+  return DOC_LABELS[type];
+}
+
 function UploadPage() {
-  const { session, setSession } = useSession();
+  const { session, setSession, recordAudit } = useSession();
   const [phase, setPhase] = useState<Phase>("application");
   const [selectedIncome, setSelectedIncome] = useState<DocType | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [oldDatePending, setOldDatePending] = useState<null | {
+    docId: string;
     docType: DocType;
     fileName: string;
     date: string;
+    fields: ExtractedField[];
+    previewPages?: Record<number, string>;
+    evidenceChunks?: EvidenceChunk[];
+    warning?: string;
   }>(null);
+  const [mismatchPending, setMismatchPending] = useState<null | {
+    docId: string;
+    file: File;
+    fileName: string;
+    selectedDocType: DocType;
+    detectedDocType: DocType;
+    scan: ScanResult;
+  }>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,12 +94,15 @@ function UploadPage() {
   const hasAnyIncome = addedIncomeTypes.size > 0;
 
   function addDoc(
+    id: string,
     type: DocType,
     fileName: string,
     documentDate: string,
     status: "uploaded" | "expired",
+    fields: ExtractedField[],
+    previewPages?: Record<number, string>,
+    evidenceChunks?: EvidenceChunk[],
   ) {
-    const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setSession((s) => ({
       ...s,
       docs: [
@@ -89,10 +113,17 @@ function UploadPage() {
           fileName,
           documentDate,
           status,
-          fields: mockFieldsFor(type, id),
+          previewPages,
+          evidenceChunks,
+          fields,
         },
       ],
     }));
+    recordAudit("document_upload", {
+      route: "/upload",
+      docType: type,
+      status,
+    });
   }
 
   function advanceAfterAdd() {
@@ -109,54 +140,207 @@ function UploadPage() {
     fileInputRef.current?.click();
   }
 
-  function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+  async function extractAndMaybeAdd({
+    docId,
+    file,
+    fileName,
+    finalDocType,
+    scan,
+    mismatchWarning,
+  }: {
+    docId: string;
+    file: File;
+    fileName: string;
+    finalDocType: DocType;
+    scan: ScanResult;
+    mismatchWarning?: string;
+  }): Promise<{ status: "added" | "old_pending"; warnings: string[] }> {
+    const extraction = await extractDocumentFields({
+      finalDocType,
+      docId,
+      file,
+      scan,
+    });
+    recordAudit("document_extract", {
+      route: "/upload",
+      docType: finalDocType,
+      status: extraction.fields.length > 0 ? "fields_extracted" : "no_fields",
+    });
+    const fields = extraction.fields;
+    const previewPages = extraction.previewPages ?? {};
+    const evidenceChunks = extraction.evidenceChunks ?? [];
+    const date =
+      extraction.documentDate ??
+      scan.documentDate ??
+      new Date(file.lastModified).toISOString().slice(0, 10);
+
+    if (date < DATE_CUTOFF) {
+      setOldDatePending({
+        docId,
+        docType: finalDocType,
+        fileName,
+        date,
+        fields,
+        previewPages,
+        evidenceChunks,
+        warning: mismatchWarning,
+      });
+      recordAudit("document_upload", {
+        route: "/upload",
+        docType: finalDocType,
+        status: "old_pending",
+      });
+      return { status: "old_pending", warnings: extraction.warnings };
+    }
+
+    setSession((s) => ({
+      ...s,
+      docs: [
+        ...s.docs.filter((d) => !(d.type === finalDocType && d.status === "skipped")),
+        {
+          id: docId,
+          type: finalDocType,
+          fileName,
+          documentDate: date,
+          status: "uploaded",
+          previewPages,
+          evidenceChunks,
+          fields,
+        },
+      ],
+    }));
+
+    if (mismatchWarning) {
+      setAnnouncement(mismatchWarning);
+    }
+    recordAudit("document_upload", {
+      route: "/upload",
+      docType: finalDocType,
+      status: "uploaded",
+    });
+    return { status: "added", warnings: extraction.warnings };
+  }
+
+  async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
 
     const MAX_BYTES = 20 * 1024 * 1024;
     let addedCount = 0;
-    let pendingOld: null | { docType: DocType; fileName: string; date: string } = null;
+    let pendingOld = false;
     let tooLarge = 0;
+    const warnings = new Set<string>();
+    let pendingMismatch = false;
 
-    for (const file of files) {
-      if (file.size > MAX_BYTES) {
-        tooLarge += 1;
-        continue;
-      }
-      const fileName = file.name;
-      const date = new Date(file.lastModified).toISOString().slice(0, 10);
+    setIsExtracting(true);
+    setAnnouncement("Reading document. We will ask you to review what we find.");
 
-      if (date < DATE_CUTOFF) {
-        if (!pendingOld) {
-          pendingOld = { docType: currentType, fileName, date };
+    try {
+      for (const file of files) {
+        if (file.size > MAX_BYTES) {
+          tooLarge += 1;
+          continue;
         }
-        continue;
+        const fileName = file.name;
+        const id = `${currentType}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const scan = await scanDocument(file, currentType);
+        recordAudit("document_scan", {
+          route: "/upload",
+          docType: currentType,
+          status: scan.detectedDocType === currentType ? "matched" : "mismatch",
+        });
+        scan.warnings.forEach((warning) => warnings.add(warning));
+
+        if (scan.detectedDocType !== currentType) {
+          setMismatchPending({
+            docId: id,
+            file,
+            fileName,
+            selectedDocType: currentType,
+            detectedDocType: scan.detectedDocType,
+            scan,
+          });
+          pendingMismatch = true;
+          break;
+        }
+
+        const result = await extractAndMaybeAdd({
+          docId: id,
+          file,
+          fileName,
+          finalDocType: currentType,
+          scan,
+        });
+        result.warnings.forEach((warning) => warnings.add(warning));
+        if (result.status === "added") addedCount += 1;
+        if (result.status === "old_pending") {
+          pendingOld = true;
+          break;
+        }
       }
-      addDoc(currentType, fileName, date, "uploaded");
-      addedCount += 1;
+    } finally {
+      setIsExtracting(false);
     }
 
     const sizeMsg =
       tooLarge > 0
         ? ` ${tooLarge} file${tooLarge === 1 ? " was" : "s were"} larger than 20 MB and skipped.`
         : "";
+    const warningMsg = warnings.size > 0 ? ` ${Array.from(warnings).join(" ")}` : "";
 
     if (pendingOld) {
-      setOldDatePending(pendingOld);
       setAnnouncement(
-        `${addedCount} file${addedCount === 1 ? "" : "s"} added. One older file needs your confirmation.${sizeMsg}`,
+        `${addedCount} file${addedCount === 1 ? "" : "s"} added. One older file needs your confirmation.${sizeMsg}${warningMsg}`,
+      );
+      return;
+    }
+
+    if (pendingMismatch) {
+      setAnnouncement(
+        `${addedCount} file${addedCount === 1 ? "" : "s"} added. One file needs your document type choice.${sizeMsg}${warningMsg}`,
       );
       return;
     }
 
     if (addedCount > 0) {
       setAnnouncement(
-        `${addedCount} ${DOC_LABELS[currentType]} file${addedCount === 1 ? "" : "s"} added.${sizeMsg}`,
+        `${addedCount} file${addedCount === 1 ? "" : "s"} added.${sizeMsg}${warningMsg}`,
       );
       advanceAfterAdd();
     } else if (tooLarge > 0) {
       setAnnouncement(`No files added.${sizeMsg}`);
+    }
+  }
+
+  async function resolveMismatch(finalDocType: DocType, warning?: string) {
+    if (!mismatchPending) return;
+    const pending = mismatchPending;
+    setMismatchPending(null);
+    setIsExtracting(true);
+    setAnnouncement("Reading document. We will ask you to review what we find.");
+    try {
+      const result = await extractAndMaybeAdd({
+        docId: pending.docId,
+        file: pending.file,
+        fileName: pending.fileName,
+        finalDocType,
+        scan: pending.scan,
+        mismatchWarning: warning,
+      });
+      const warningText = result.warnings.length > 0 ? ` ${result.warnings.join(" ")}` : "";
+      if (result.status === "added") {
+        setAnnouncement(
+          warning ?? `${pending.fileName} added as ${docLabel(finalDocType)}.${warningText}`,
+        );
+        advanceAfterAdd();
+      } else {
+        setAnnouncement(
+          `${pending.fileName} needs your confirmation because it may be too old.${warningText}`,
+        );
+      }
+    } finally {
+      setIsExtracting(false);
     }
   }
 
@@ -174,6 +358,11 @@ function UploadPage() {
         },
       ],
     }));
+    recordAudit("document_upload", {
+      route: "/upload",
+      docType: "application_form",
+      status: "skipped",
+    });
     setAnnouncement("Marked application form as not available. Moving to income.");
     setPhase("income-choose");
   }
@@ -185,17 +374,19 @@ function UploadPage() {
       docs: s.docs.filter((d) => d.id !== id),
     }));
     if (doc) {
-      setAnnouncement(
-        `${DOC_LABELS[doc.type]} removed. You can upload it again or continue.`,
-      );
+      recordAudit("document_delete", {
+        route: "/upload",
+        docType: doc.type,
+        status: "deleted",
+      });
+      setAnnouncement(`${DOC_LABELS[doc.type]} removed. You can upload it again or continue.`);
     }
   }
 
   const canFinish = hasAnyIncome;
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
 
-  const stepLabel =
-    phase === "application" ? "Step 1 of 2" : "Step 2 of 2";
+  const stepLabel = phase === "application" ? "Step 1 of 2" : "Step 2 of 2";
 
   return (
     <PageShell title="Build your renter packet" step={stepLabel}>
@@ -218,8 +409,7 @@ function UploadPage() {
           <div className="h-1.5 flex-1 rounded-full bg-primary" />
           <div
             className={
-              "h-1.5 flex-1 rounded-full " +
-              (phase !== "application" ? "bg-primary" : "bg-muted")
+              "h-1.5 flex-1 rounded-full " + (phase !== "application" ? "bg-primary" : "bg-muted")
             }
           />
         </div>
@@ -268,11 +458,18 @@ function UploadPage() {
             <button
               type="button"
               onClick={openFilePicker}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              disabled={isExtracting}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-describedby={isExtracting ? "application-upload-not-allowed" : undefined}
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
-              Upload application form
+              {isExtracting ? "Not allowed - reading document" : "Upload application form"}
             </button>
+            {isExtracting && (
+              <p id="application-upload-not-allowed" className="text-xs font-medium text-amber-800">
+                Not allowed yet: wait for the current document to finish reading.
+              </p>
+            )}
             {hasApplication ? (
               <button
                 type="button"
@@ -319,9 +516,7 @@ function UploadPage() {
           <div className="mt-5 flex flex-col gap-2">
             {INCOME_TYPES.map((t) => {
               const already = addedIncomeTypes.has(t);
-              const label = hasAnyIncome
-                ? `Add another ${DOC_LABELS[t]}`
-                : `Add ${DOC_LABELS[t]}`;
+              const label = hasAnyIncome ? `Add another ${DOC_LABELS[t]}` : `Add ${DOC_LABELS[t]}`;
               return (
                 <button
                   key={t}
@@ -418,11 +613,20 @@ function UploadPage() {
             <button
               type="button"
               onClick={openFilePicker}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              disabled={isExtracting}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-describedby={isExtracting ? "income-upload-not-allowed" : undefined}
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
-              Upload {DOC_LABELS[selectedIncome]}
+              {isExtracting
+                ? "Not allowed - reading document"
+                : `Upload ${DOC_LABELS[selectedIncome]}`}
             </button>
+            {isExtracting && (
+              <p id="income-upload-not-allowed" className="text-xs font-medium text-amber-800">
+                Not allowed yet: wait for the current document to finish reading.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -507,20 +711,82 @@ function UploadPage() {
             navigate({ to: "/review" });
           }}
           className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="I'm done uploading. Go to review."
+          aria-label={
+            canFinish
+              ? "I'm done uploading. Go to review."
+              : "Not allowed. At least one income document is required to continue."
+          }
+          aria-describedby={!canFinish ? "upload-not-allowed" : undefined}
         >
-          I'm done uploading!
+          {canFinish ? "I'm done uploading!" : "Not allowed - add an income document"}
         </button>
         {!canFinish && (
-          <p className="text-xs font-medium text-amber-800">
-            At least one income document is required to continue.
+          <p id="upload-not-allowed" className="text-xs font-medium text-amber-800">
+            Not allowed yet: at least one income document is required to continue.
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Cutoff for document age: <strong>{DATE_CUTOFF}</strong> (60 days before {TODAY}). If a
-          file is older, we'll ask before using it.
+          Cutoff for document age: <strong>{DATE_CUTOFF}</strong> ({DOCUMENT_AGE_LIMIT_DAYS} days
+          before {TODAY}). If a file is older, we'll ask before using it.
         </p>
       </div>
+
+      {mismatchPending && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="mismatch-title"
+          aria-describedby="mismatch-body"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-background p-5 shadow-xl">
+            <div className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+              <h2 id="mismatch-title" className="text-lg font-semibold text-foreground">
+                This looks like {docLabel(mismatchPending.detectedDocType)}
+              </h2>
+            </div>
+            <p id="mismatch-body" className="mt-2 text-sm text-muted-foreground">
+              You uploaded <strong className="text-foreground">{mismatchPending.fileName}</strong>{" "}
+              under{" "}
+              <strong className="text-foreground">
+                {docLabel(mismatchPending.selectedDocType)}
+              </strong>
+              . What do you want to do?
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={isExtracting}
+                onClick={() =>
+                  resolveMismatch(
+                    mismatchPending.selectedDocType,
+                    `${mismatchPending.fileName} uploaded as ${docLabel(
+                      mismatchPending.selectedDocType,
+                    )}. This may not match the selected document type. Please review carefully.`,
+                  )
+                }
+                className="inline-flex h-11 items-center justify-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isExtracting ? "Not allowed - reading document" : "No, upload anyway"}
+              </button>
+              <button
+                type="button"
+                disabled={isExtracting}
+                onClick={() => resolveMismatch(mismatchPending.detectedDocType)}
+                className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isExtracting ? "Not allowed - reading document" : "Yes, move it"}
+              </button>
+            </div>
+            {isExtracting && (
+              <p className="mt-2 text-xs font-medium text-amber-800">
+                Not allowed yet: wait for the current document to finish reading.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {oldDatePending && (
         <div
@@ -540,7 +806,8 @@ function UploadPage() {
             <p id="old-body" className="mt-2 text-sm text-muted-foreground">
               <strong className="text-foreground">{oldDatePending.fileName}</strong> is dated{" "}
               <strong className="text-foreground">{oldDatePending.date}</strong>. Our cutoff is{" "}
-              {DATE_CUTOFF} (60 days before {TODAY}). Do you want to include it anyway?
+              {DATE_CUTOFF} ({DOCUMENT_AGE_LIMIT_DAYS} days before {TODAY}). Do you want to include
+              it anyway?
             </p>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
@@ -557,13 +824,17 @@ function UploadPage() {
                 type="button"
                 onClick={() => {
                   addDoc(
+                    oldDatePending.docId,
                     oldDatePending.docType,
                     oldDatePending.fileName,
                     oldDatePending.date,
                     "expired",
+                    oldDatePending.fields,
+                    oldDatePending.previewPages,
+                    oldDatePending.evidenceChunks,
                   );
                   setAnnouncement(
-                    `Old document accepted with your permission.`,
+                    oldDatePending.warning ?? `Old document accepted with your permission.`,
                   );
                   setOldDatePending(null);
                   advanceAfterAdd();

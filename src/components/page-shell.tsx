@@ -1,16 +1,27 @@
 import { useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Lock, MessageCircle, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { useSession } from "@/lib/session-store";
+import {
+  classifyChatRequest,
+  createChatSnapshot,
+  fallbackChatAnswer,
+  PENDING_FIELD_FOCUS_KEY,
+  type ChatAnswer,
+  type ChatNavigation,
+} from "@/lib/chat-guardrails";
+import type { ChatNextAction } from "@/lib/chat-workflow";
+import { fetchReferenceEvidence } from "@/lib/reference-evidence";
+import { effectiveHouseholdSize, useSession } from "@/lib/session-store";
 
 interface PageShellProps {
   title: string;
   step?: string;
   children: ReactNode;
   hideBack?: boolean;
+  wide?: boolean;
 }
 
-export function PageShell({ title, step, children, hideBack }: PageShellProps) {
+export function PageShell({ title, step, children, hideBack, wide }: PageShellProps) {
   const router = useRouter();
   const { resetSession, deleteSession } = useSession();
   const [chatOpen, setChatOpen] = useState(false);
@@ -33,10 +44,10 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
           </div>
           <div
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-            aria-label="Private session — your data stays on this device and is cleared when you close this tab"
+            aria-label="Private session — local browser session storage only, cleared when you delete or close this tab"
           >
             <Lock className="h-3 w-3" aria-hidden="true" />
-            <span>Private session · cleared on close</span>
+            <span>Private session · local only</span>
           </div>
         </div>
         <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2 px-4 py-3">
@@ -82,7 +93,10 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
         </div>
       </header>
 
-      <main id="main" className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
+      <main
+        id="main"
+        className={"mx-auto w-full flex-1 px-4 py-6 " + (wide ? "max-w-7xl" : "max-w-2xl")}
+      >
         {children}
       </main>
 
@@ -92,7 +106,7 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
             RentSmooth never approves or denies applications — every value stays under your control.
           </p>
-          <p>WCAG 2.2 AA · No hidden proxies · Ephemeral processing</p>
+          <p>WCAG 2.2 AA · Local session storage · Ephemeral processing</p>
         </div>
       </footer>
 
@@ -132,6 +146,107 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
 }
 
 function ChatPopup({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const { session, recordAudit } = useSession();
+  const [messages, setMessages] = useState<
+    Array<{
+      role: "assistant" | "user";
+      text: string;
+      navigation?: ChatNavigation;
+      blockers?: string[];
+      nextActions?: ChatNextAction[];
+      citations?: string[];
+    }>
+  >([
+    {
+      role: "assistant",
+      text: "Hi. I can answer from your uploaded inputs and the rule source, explain security, and help you navigate. I cannot decide, infer missing values, use protected traits, or change anything.",
+    },
+    {
+      role: "assistant",
+      text: 'Try asking: "What should I do next?", "Why is calculation blocked?", or "Take me to gross pay on the Review page."',
+    },
+  ]);
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function submitQuestion() {
+    const trimmed = draft.trim();
+    if (!trimmed || pending) return;
+    const classification = classifyChatRequest(trimmed);
+    setMessages((current) => [...current, { role: "user", text: trimmed }]);
+    recordAudit(classification.allowed ? "chat_help" : "chat_refusal", {
+      route: window.location.pathname,
+      status: classification.allowed ? "requested" : classification.reason,
+    });
+    setDraft("");
+    setPending(true);
+    try {
+      const referenceEvidence = await fetchReferenceEvidence(effectiveHouseholdSize(session));
+      const snapshot = createChatSnapshot(session, window.location.pathname, referenceEvidence);
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: trimmed, snapshot }),
+      });
+      const answer = response.ok
+        ? ((await response.json()) as ChatAnswer)
+        : fallbackChatAnswer(trimmed, snapshot);
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: answer.answer,
+          navigation: answer.navigation,
+          blockers: answer.blockers,
+          nextActions: answer.nextActions,
+          citations: answer.citations,
+        },
+      ]);
+      recordAudit(answer.refused ? "chat_refusal" : "chat_help", {
+        route: window.location.pathname,
+        status: answer.refused ? String(answer.reason ?? "refused") : "answered",
+      });
+    } catch {
+      const snapshot = createChatSnapshot(session, window.location.pathname);
+      const answer = fallbackChatAnswer(trimmed, snapshot);
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: answer.answer,
+          navigation: answer.navigation,
+          blockers: answer.blockers,
+          nextActions: answer.nextActions,
+          citations: answer.citations,
+        },
+      ]);
+      recordAudit("chat_help", { route: window.location.pathname, status: "fallback" });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function navigateTo(target: ChatNavigation) {
+    if (target.fieldKey) {
+      window.sessionStorage.setItem(
+        PENDING_FIELD_FOCUS_KEY,
+        JSON.stringify({
+          path: target.path,
+          fieldKey: target.fieldKey,
+          label: target.label,
+        }),
+      );
+    }
+    router.navigate({ to: target.path });
+    recordAudit("chat_help", {
+      route: window.location.pathname,
+      fieldKey: target.fieldKey,
+      status: "navigate",
+    });
+    onClose();
+  }
+
   return (
     <div
       role="dialog"
@@ -151,20 +266,79 @@ function ChatPopup({ onClose }: { onClose: () => void }) {
             aria-label="Close help chat"
           >
             <X className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only">Close help chat</span>
           </button>
         </div>
         <div className="max-h-80 space-y-3 overflow-y-auto px-4 py-4 text-sm">
-          <p className="rounded-lg bg-muted p-3">
-            Hi. I can explain what a step means, but I never decide anything for you.
-            Approvals are based only on the rule, your confirmed inputs, and the calculation.
-          </p>
-          <p className="rounded-lg bg-muted p-3">
-            Try asking: "What does 'annualized income' mean?" or "Why do you need this document?"
-          </p>
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={
+                "rounded-lg p-3 " +
+                (message.role === "user"
+                  ? "ml-8 bg-primary text-primary-foreground"
+                  : "mr-8 bg-muted")
+              }
+            >
+              <p>{message.text}</p>
+              {message.blockers && message.blockers.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Workflow blockers">
+                  {message.blockers.slice(0, 3).map((blocker) => (
+                    <span
+                      key={blocker}
+                      className="rounded-full border border-amber-600/40 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+                    >
+                      {blocker}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {message.navigation && (
+                <button
+                  type="button"
+                  onClick={() => navigateTo(message.navigation as ChatNavigation)}
+                  className="mt-3 inline-flex h-9 items-center rounded-md border border-input bg-background px-3 text-xs font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {message.navigation.label}
+                </button>
+              )}
+              {!message.navigation && message.nextActions?.[0] && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigateTo({
+                      path: message.nextActions![0].path,
+                      fieldKey: message.nextActions![0].fieldKey,
+                      label: message.nextActions![0].label,
+                    })
+                  }
+                  className="mt-3 inline-flex h-9 items-center rounded-md border border-input bg-background px-3 text-xs font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {message.nextActions[0].label}
+                </button>
+              )}
+              {message.citations && message.citations.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1" aria-label="Answer sources">
+                  {message.citations.map((citation) => (
+                    <span
+                      key={citation}
+                      className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                    >
+                      {citation}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {pending && (
+            <p className="mr-8 rounded-lg bg-muted p-3">Checking the provided inputs...</p>
+          )}
         </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            submitQuestion();
           }}
           className="flex gap-2 border-t p-3"
         >
@@ -175,13 +349,17 @@ function ChatPopup({ onClose }: { onClose: () => void }) {
             id="chat-input"
             type="text"
             placeholder="Type a question…"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
             className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <button
             type="submit"
+            disabled={pending}
+            aria-disabled={pending}
             className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Send
+            {pending ? "..." : "Send"}
           </button>
         </form>
       </div>

@@ -1,5 +1,6 @@
 import { Check, Pencil, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { validateNumericField } from "@/lib/income-validation";
 import { DOC_LABELS, useSession, type ExtractedField } from "@/lib/session-store";
 
 interface Props {
@@ -50,8 +51,15 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
       inputRef.current?.focus();
       return;
     }
+    const validation = validateNumericField(field.key, next);
+    if (!validation.ok) {
+      setError(validation.error ?? "Value is not valid.");
+      inputRef.current?.focus();
+      return;
+    }
+    const savedValue = validation.normalized ?? next;
     setError("");
-    confirmField(field.id, next === field.value ? undefined : next);
+    confirmField(field.id, savedValue === field.value ? undefined : savedValue);
     onConfirmed();
   }
 
@@ -102,17 +110,28 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
               Edit
             </button>
+            {wasCorrected && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  confirmField(field.id, undefined);
+                  onConfirmed();
+                }}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-input px-2.5 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={`Revert ${field.label} to original value ${field.value}`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Revert
+              </button>
+            )}
           </div>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Source: {DOC_LABELS[field.sourceDoc]}, page {field.sourcePage} · Location: highlighted box
         </p>
         {reopen && (
-          <ReopenEditor
-            field={field}
-            onDone={() => setReopen(false)}
-            onConfirmed={onConfirmed}
-          />
+          <ReopenEditor field={field} onDone={() => setReopen(false)} onConfirmed={onConfirmed} />
         )}
       </article>
     );
@@ -168,7 +187,11 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
             className="h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {error && (
-            <p id={`v-${field.id}-err`} role="alert" className="mt-1 text-sm font-medium text-destructive">
+            <p
+              id={`v-${field.id}-err`}
+              role="alert"
+              className="mt-1 text-sm font-medium text-destructive"
+            >
               {error}
             </p>
           )}
@@ -228,7 +251,13 @@ function ReopenEditor({
       setError("Value cannot be empty.");
       return;
     }
-    confirmField(field.id, next === field.value ? undefined : next);
+    const validation = validateNumericField(field.key, next);
+    if (!validation.ok) {
+      setError(validation.error ?? "Value is not valid.");
+      return;
+    }
+    const savedValue = validation.normalized ?? next;
+    confirmField(field.id, savedValue === field.value ? undefined : savedValue);
     onConfirmed();
     onDone();
   }

@@ -1,11 +1,7 @@
 import { AlertTriangle, Check, Pencil, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import {
-  DOC_LABELS,
-  useSession,
-  type MergedField,
-  type MergedSource,
-} from "@/lib/session-store";
+import { validateNumericField } from "@/lib/income-validation";
+import { DOC_LABELS, useSession, type MergedField, type MergedSource } from "@/lib/session-store";
 
 interface Props {
   merged: MergedField;
@@ -64,9 +60,16 @@ export function MergedValueCard({
       inputRef.current?.focus();
       return;
     }
+    const validation = validateNumericField(merged.key, next);
+    if (!validation.ok) {
+      setError(validation.error ?? "Value is not valid.");
+      inputRef.current?.focus();
+      return;
+    }
+    const savedValue = validation.normalized ?? next;
     setError("");
-    const corrected = next === merged.displayValue ? undefined : next;
-    confirmMerged(merged.key, merged.category, corrected);
+    const corrected = savedValue === merged.displayValue ? undefined : savedValue;
+    confirmMerged(merged.mergeId, corrected);
     onConfirmed();
   }
 
@@ -76,8 +79,10 @@ export function MergedValueCard({
     inputRef.current?.focus();
   }
 
-  const lastChange = merged.history[merged.history.length - 1];
   const hasMulti = merged.sources.length > 1;
+  const originalValue = merged.sources[0]?.value ?? merged.displayValue;
+  const currentValue = merged.corrected ?? merged.displayValue;
+  const wasCorrected = currentValue !== originalValue;
 
   // Confirmed collapsed view
   if (merged.confirmed && !reopen) {
@@ -85,7 +90,7 @@ export function MergedValueCard({
       <article
         onClick={onActivate}
         className={
-          "rounded-xl border bg-card p-4 transition " +
+          "rounded-lg border bg-card p-3 transition " +
           (isActive ? "ring-2 ring-primary" : "hover:border-primary/40")
         }
       >
@@ -94,10 +99,10 @@ export function MergedValueCard({
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {merged.label}
             </h3>
-            <p className="mt-1 truncate text-lg font-semibold">{merged.displayValue}</p>
-            {lastChange && (
+            <p className="mt-0.5 truncate text-base font-semibold">{currentValue}</p>
+            {wasCorrected && (
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Last change: <span className="line-through">{lastChange.from}</span> → {lastChange.to}
+                Original: <span className="line-through">{originalValue}</span> → {currentValue}
               </p>
             )}
           </div>
@@ -113,33 +118,34 @@ export function MergedValueCard({
                 onActivate();
                 setReopen(true);
               }}
-              className="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-input px-2.5 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input px-2.5 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={`Edit ${merged.label} (currently ${merged.displayValue})`}
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
               Edit
             </button>
+            {wasCorrected && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  confirmMerged(merged.mergeId, undefined);
+                  onConfirmed();
+                }}
+                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input px-2.5 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={`Revert ${merged.label} to original value ${originalValue}`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Revert
+              </button>
+            )}
           </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           {merged.sources.length === 1
             ? `Source: ${DOC_LABELS[merged.sources[0].docType]}, page ${merged.sources[0].page}`
             : `Sources: ${merged.sources.map((s) => DOC_LABELS[s.docType]).join(", ")}`}
         </p>
-        {merged.history.length > 1 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-              Full history ({merged.history.length} changes)
-            </summary>
-            <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-              {merged.history.map((h, i) => (
-                <li key={i}>
-                  <span className="line-through">{h.from}</span> → {h.to}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
       </article>
     );
   }
@@ -148,30 +154,31 @@ export function MergedValueCard({
     <article
       onClick={onActivate}
       className={
-        "min-h-[min(64vh,520px)] overflow-hidden rounded-xl border bg-card transition " +
+        "overflow-hidden rounded-lg border bg-card transition " +
         (isActive ? "ring-2 ring-primary" : "hover:border-primary/40")
       }
     >
       <div className={"h-1 w-full " + tier.topBar} aria-hidden="true" />
-      <div className="p-5">
+      <div className="p-4">
         {merged.isOld && (
           <div
             role="note"
-            className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/60 bg-amber-50 p-3 text-sm text-amber-900"
+            className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/60 bg-amber-50 p-2.5 text-sm text-amber-900"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>
-              <span className="font-semibold">Older than 6 months</span> — double-check
-              this is still current before continuing.
+              <span className="font-semibold">Older than 6 months</span> — double-check this is
+              still current before continuing.
             </p>
           </div>
         )}
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
-            <h3 className="text-lg font-semibold">{merged.label}</h3>
+            <h3 className="text-base font-semibold">{merged.label}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Found value: <span className="font-medium text-foreground">{merged.displayValue}</span>
+              Found value:{" "}
+              <span className="font-medium text-foreground">{merged.displayValue}</span>
             </p>
           </div>
           <span
@@ -188,9 +195,13 @@ export function MergedValueCard({
         {hasMulti && (
           <div className="mt-3">
             <p className="mb-1 text-xs font-medium text-muted-foreground">
-              Found in {merged.sources.length} documents — tap to view highlight:
+              Found in {merged.sources.length} documents
             </p>
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={`Sources for ${merged.label}`}>
+            <div
+              className="flex flex-wrap gap-1.5"
+              role="tablist"
+              aria-label={`Sources for ${merged.label}`}
+            >
               {merged.sources.map((s) => {
                 const active = s.fieldId === activeSource.fieldId;
                 return (
@@ -204,7 +215,7 @@ export function MergedValueCard({
                       onSourceChange(s);
                     }}
                     className={
-                      "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-medium " +
+                      "inline-flex h-8 items-center gap-1 rounded-md border px-2.5 text-xs font-medium " +
                       (active
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-input bg-background hover:bg-accent")
@@ -227,12 +238,12 @@ export function MergedValueCard({
         )}
 
         <div className="mt-4">
-          <label htmlFor={`v-${merged.key}-${merged.category}`} className="sr-only">
+          <label htmlFor={`v-${merged.mergeId}`} className="sr-only">
             Correct value for {merged.label}
           </label>
           <input
             ref={inputRef}
-            id={`v-${merged.key}-${merged.category}`}
+            id={`v-${merged.mergeId}`}
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -244,21 +255,25 @@ export function MergedValueCard({
               }
             }}
             aria-invalid={!!error}
-            aria-describedby={error ? `v-${merged.key}-err` : undefined}
-            className="h-12 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-describedby={error ? `v-${merged.mergeId}-err` : undefined}
+            className="h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {error && (
-            <p id={`v-${merged.key}-err`} role="alert" className="mt-1 text-sm font-medium text-destructive">
+            <p
+              id={`v-${merged.mergeId}-err`}
+              role="alert"
+              className="mt-1 text-sm font-medium text-destructive"
+            >
               {error}
             </p>
           )}
         </div>
 
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <button
             type="button"
             onClick={confirm}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={
               edited
                 ? `Confirm corrected value ${draft.trim()} for ${merged.label}`
@@ -272,7 +287,7 @@ export function MergedValueCard({
             <button
               type="button"
               onClick={reset}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-auto"
               aria-label={`Reset to found value ${merged.displayValue}`}
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -281,14 +296,15 @@ export function MergedValueCard({
           )}
         </div>
 
-        {lastChange && (
+        {wasCorrected && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Last change: <span className="line-through">{lastChange.from}</span> → {lastChange.to}
+            Original: <span className="line-through">{originalValue}</span> → {currentValue}
           </p>
         )}
 
-        <p className="mt-3 text-xs text-muted-foreground">
-          Source: {DOC_LABELS[activeSource.docType]}, page {activeSource.page} · Location: highlighted box
+        <p className="mt-2 text-xs text-muted-foreground">
+          Source: {DOC_LABELS[activeSource.docType]}, page {activeSource.page} · Location:
+          highlighted box
         </p>
 
         {reopen && (

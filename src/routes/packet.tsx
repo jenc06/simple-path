@@ -1,20 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import { EditableValue } from "@/components/editable-value";
+import { IncomeSourceTimeline } from "@/components/income-source-timeline";
+import { PENDING_FIELD_FOCUS_KEY } from "@/lib/chat-guardrails";
+import {
+  createGroundedClaim,
+  summarizeVerifications,
+  verifyClaims,
+} from "@/lib/citation-verification";
+import { fetchReferenceEvidence, loadingReferenceEvidence } from "@/lib/reference-evidence";
 
 import {
   DOC_LABELS,
-  THRESHOLD,
   TODAY,
   allFields,
+  buildIncomeSourceTimeline,
   computeAnnualIncome,
+  detectIncomeSourceReviews,
+  effectiveHouseholdSize,
+  thresholdForHouseholdSize,
   useSession,
   type DocType,
+  type ExtractedField,
+  type IncomeResult,
+  type IncomeSourceReview,
+  type UploadedDoc,
 } from "@/lib/session-store";
-
 
 export const Route = createFileRoute("/packet")({
   head: () => ({
@@ -30,22 +44,167 @@ const CHECKLIST: DocType[] = [
   "employment_letter",
   "gig_statement",
 ];
+const INCOME_DOCUMENT_TYPES: DocType[] = [
+  "pay_stub",
+  "benefit_letter",
+  "employment_letter",
+  "gig_statement",
+];
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function pdfPageUrl(url: string, page: number) {
+  return `${url}#page=${page}`;
+}
+
+function incomeReviewChoiceLabel(choice: string | undefined) {
+  switch (choice) {
+    case "same_source_count_once":
+      return "Same job/source - estimate one annual income";
+    case "separate_sources_add_each":
+      return "Separate jobs/sources - count each separately";
+    case "needs_manual_review":
+      return "Not sure - flag for human review";
+    default:
+      return "Not reviewed";
+  }
+}
+
+function claimTypeForValue(value: string) {
+  if (/^20\d{2}-\d{2}-\d{2}$/.test(value.trim())) return "date";
+  if (/^\$/.test(value.trim()) || /,\d{3}/.test(value) || /\.\d{2}$/.test(value.trim())) {
+    return "money";
+  }
+  if (/^-?\d+(?:\.\d+)?$/.test(value.trim())) return "number";
+  return "text";
+}
+
+function buildReviewerHandoff({
+  annual,
+  belowOrEqual,
+  income,
+  incomeReviews,
+  needsReview,
+  suspiciousFields,
+  unresolvedCitationWarnings,
+  docs,
+  missingItems,
+  expiredItems,
+}: {
+  annual: number;
+  belowOrEqual: boolean;
+  income: IncomeResult;
+  incomeReviews: IncomeSourceReview[];
+  needsReview: ExtractedField[];
+  suspiciousFields: ExtractedField[];
+  unresolvedCitationWarnings: Array<{ claimId: string }>;
+  docs: UploadedDoc[];
+  missingItems: string[];
+  expiredItems: string[];
+}) {
+  const unresolvedIncomeReviews = incomeReviews.filter((review) => !review.choice);
+  const manualIncomeReviews = incomeReviews.filter(
+    (review) => review.choice === "needs_manual_review",
+  );
+  const openItems = [
+    ...missingItems.map((item) => `Missing item: ${item}`),
+    ...expiredItems.map((item) => `Expired item: ${item}`),
+    ...income.errors.map((error) => `Calculation issue: ${error}`),
+    ...needsReview.map((field) => `Unconfirmed value: ${field.label}`),
+    ...unresolvedIncomeReviews.map((review) => `Income source decision needed: ${review.reason}`),
+    ...manualIncomeReviews.map((review) => `Manual income source review: ${review.reason}`),
+    ...unresolvedCitationWarnings.map((warning) => `Source check warning: ${warning.claimId}`),
+    ...suspiciousFields.map(
+      (field) =>
+        `Suspicious document text ignored: ${DOC_LABELS[field.sourceDoc]}, page ${field.sourcePage}`,
+    ),
+  ];
+  const readinessStatus = openItems.length > 0 ? "NEEDS_REVIEW" : "READY_TO_REVIEW";
+
+  return {
+    status: readinessStatus,
+    readinessStatus,
+    annualizedIncome: Number.isNaN(annual) ? null : annual,
+    thresholdComparison: Number.isNaN(annual)
+      ? "Unavailable"
+      : belowOrEqual
+        ? "At or below threshold"
+        : "Above threshold",
+    incomeSourceDecisions: incomeReviews.map((review) => ({
+      id: review.id,
+      choice: review.choice ?? null,
+      choiceLabel: incomeReviewChoiceLabel(review.choice),
+      documents: review.documentIds
+        .map((id) => docs.find((doc) => doc.id === id)?.fileName)
+        .filter(Boolean),
+      reason: review.reason,
+    })),
+    missingItems,
+    expiredItems,
+    openItems,
+    decisionBoundary: "Factual comparison only; RentSmooth does not approve or deny eligibility.",
+  };
+}
+
 function PacketPage() {
-  const { session, setSession } = useSession();
+  const { session, setSession, recordAudit, finalizePacket } = useSession();
   const [showJson, setShowJson] = useState(false);
   const [preview, setPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [reviewedCitationIds, setReviewedCitationIds] = useState<Set<string>>(() => new Set());
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const lastFocusedBeforePreviewRef = useRef<HTMLElement | null>(null);
+  const [referenceEvidence, setReferenceEvidence] = useState(() =>
+    loadingReferenceEvidence(effectiveHouseholdSize(session)),
+  );
 
   const fields = useMemo(() => allFields(session), [session]);
+  const uploadedEvidence = useMemo(
+    () => session.docs.flatMap((d) => d.evidenceChunks ?? []),
+    [session.docs],
+  );
+  const boundedEvidence = useMemo(
+    () => [...uploadedEvidence, ...referenceEvidence.chunks],
+    [uploadedEvidence, referenceEvidence.chunks],
+  );
+  const trustedFields = useMemo(() => fields.filter((f) => f.category !== "untrusted"), [fields]);
+  const suspiciousFields = useMemo(
+    () => fields.filter((f) => f.category === "untrusted"),
+    [fields],
+  );
   const income = useMemo(() => computeAnnualIncome(session), [session]);
+  const incomeReviews = useMemo(() => detectIncomeSourceReviews(session), [session]);
+  const householdSize = useMemo(() => effectiveHouseholdSize(session), [session]);
+  const threshold = useMemo(() => thresholdForHouseholdSize(householdSize), [householdSize]);
   const annual = income.contributions.length > 0 ? income.annual : NaN;
-  const belowOrEqual = !Number.isNaN(annual) && annual <= THRESHOLD.amount;
+  const belowOrEqual = !Number.isNaN(annual) && annual <= threshold.amount;
+
+  useEffect(() => {
+    let cancelled = false;
+    setReferenceEvidence(loadingReferenceEvidence(householdSize));
+    fetchReferenceEvidence(householdSize).then((evidence) => {
+      if (!cancelled) setReferenceEvidence(evidence);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [householdSize]);
+
+  useEffect(() => {
+    const pending = readPendingFieldFocus("/packet");
+    if (!pending) return;
+    const target = trustedFields.find((field) => field.key === pending.fieldKey);
+    if (!target) return;
+    setAnnouncement(`${target.label} is ready on the Packet page.`);
+    window.requestAnimationFrame(() => {
+      const el = fieldElementByKey(target.key);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus();
+    });
+  }, [trustedFields]);
 
   const checklist = CHECKLIST.map((t) => {
     const doc = session.docs.find((d) => d.type === t);
@@ -54,14 +213,207 @@ function PacketPage() {
     if (doc.status === "uploaded") return { type: t, state: "ok" as const, doc };
     return { type: t, state: "skipped" as const, doc };
   });
+  const missingItems = useMemo(() => {
+    const items: string[] = [];
+    const application = session.docs.find((doc) => doc.type === "application_form");
+    const hasIncomeEvidence = session.docs.some(
+      (doc) => INCOME_DOCUMENT_TYPES.includes(doc.type) && doc.status !== "skipped",
+    );
+    if (!application || application.status === "skipped") items.push(DOC_LABELS.application_form);
+    if (!hasIncomeEvidence) items.push("Income evidence document");
+    return items;
+  }, [session.docs]);
+  const expiredItems = useMemo(
+    () =>
+      session.docs
+        .filter((doc) => doc.status === "expired")
+        .map(
+          (doc) => `${DOC_LABELS[doc.type]}${doc.documentDate ? ` dated ${doc.documentDate}` : ""}`,
+        ),
+    [session.docs],
+  );
 
-  const needsReview = fields.filter((f) => !f.confirmed);
+  const needsReview = trustedFields.filter((f) => !f.confirmed);
+  const claims = useMemo(() => {
+    const sourceDocByFieldId = new Map(
+      session.docs.flatMap((doc) => doc.fields.map((field) => [field.id, doc] as const)),
+    );
+    const uploadedChunkForField = (
+      fieldId: string,
+      page: number,
+      value: string,
+      claimType: ReturnType<typeof claimTypeForValue>,
+    ) => {
+      const doc = sourceDocByFieldId.get(fieldId);
+      if (!doc) return null;
+      const candidates = uploadedEvidence.filter(
+        (chunk) => chunk.sourceDocId === doc.id && chunk.page === page,
+      );
+      const matchingChunk = candidates.find((chunk) => {
+        const claim = createGroundedClaim({
+          id: `candidate-${fieldId}`,
+          label: fieldId,
+          claimType,
+          value,
+          citationChunkId: chunk.id,
+        });
+        return verifyClaims([claim], [chunk])[0]?.status === "verified";
+      });
+      return matchingChunk?.id ?? candidates[0]?.id ?? null;
+    };
+    const referenceChunkForValue = (
+      id: string,
+      label: string,
+      claimType: ReturnType<typeof claimTypeForValue>,
+      value: string | number,
+    ) => {
+      const matchingChunk = referenceEvidence.chunks.find((chunk) => {
+        const claim = createGroundedClaim({
+          id,
+          label,
+          claimType,
+          value,
+          citationChunkId: chunk.id,
+        });
+        return verifyClaims([claim], [chunk])[0]?.status === "verified";
+      });
+      return matchingChunk?.id ?? referenceEvidence.chunks[0]?.id ?? null;
+    };
+
+    return [
+      createGroundedClaim({
+        id: "hud-threshold-amount",
+        label: "HUD threshold amount",
+        claimType: "money",
+        value: threshold.amount,
+        citationChunkId: referenceChunkForValue(
+          "hud-threshold-amount",
+          "HUD threshold amount",
+          "money",
+          threshold.amount,
+        ),
+      }),
+      createGroundedClaim({
+        id: "hud-effective-date",
+        label: "HUD effective date",
+        claimType: "date",
+        value: threshold.effective,
+        citationChunkId: referenceChunkForValue(
+          "hud-effective-date",
+          "HUD effective date",
+          "date",
+          threshold.effective,
+        ),
+      }),
+      createGroundedClaim({
+        id: "hud-source-locator",
+        label: "HUD source locator",
+        claimType: "locator",
+        value: `PDF page ${threshold.page}`,
+        citationChunkId: null,
+        severity: "info",
+      }),
+      ...trustedFields
+        .filter((field) => field.confirmed)
+        .map((field) => {
+          const value = field.corrected ?? field.value;
+          const claimType = claimTypeForValue(value);
+          return createGroundedClaim({
+            id: `field-${field.id}`,
+            label: field.label,
+            claimType,
+            value,
+            citationChunkId: uploadedChunkForField(field.id, field.sourcePage, value, claimType),
+          });
+        }),
+      ...income.contributions.map((contribution, index) =>
+        createGroundedClaim({
+          id: `calculation-${index + 1}`,
+          label: `${contribution.label} annual total`,
+          claimType: "money",
+          value: contribution.amount,
+          citationChunkId: null,
+          severity: "info",
+        }),
+      ),
+    ];
+  }, [
+    income.contributions,
+    referenceEvidence.chunks,
+    session.docs,
+    threshold,
+    trustedFields,
+    uploadedEvidence,
+  ]);
+  const citationVerification = useMemo(
+    () => verifyClaims(claims, boundedEvidence),
+    [boundedEvidence, claims],
+  );
+  const verificationSummary = useMemo(
+    () => summarizeVerifications(citationVerification),
+    [citationVerification],
+  );
+  const failedVerifications = citationVerification.filter((item) => item.status === "failed");
+  const unresolvedCitationWarnings = failedVerifications.filter(
+    (item) => !reviewedCitationIds.has(item.claimId),
+  );
+  const claimById = useMemo(() => new Map(claims.map((claim) => [claim.id, claim])), [claims]);
+  const fieldByClaimId = useMemo(() => {
+    const byId = new Map<string, (typeof trustedFields)[number]>();
+    for (const field of trustedFields) byId.set(`field-${field.id}`, field);
+    return byId;
+  }, [trustedFields]);
+  const sourceCheckSummary = `${verificationSummary.verified} matched, ${unresolvedCitationWarnings.length} needs review, ${verificationSummary.notApplicable} calculated`;
+  const evidenceModeLabel =
+    referenceEvidence.evidenceMode === "loading"
+      ? "Checking live HUD reference..."
+      : referenceEvidence.fetchedWithTavily
+        ? "Tavily Extract from allowlisted HUD URLs"
+        : "Frozen local HUD reference";
+  const reviewerHandoff = useMemo(
+    () =>
+      buildReviewerHandoff({
+        annual,
+        belowOrEqual,
+        income,
+        incomeReviews,
+        needsReview,
+        suspiciousFields,
+        unresolvedCitationWarnings,
+        docs: session.docs,
+        missingItems,
+        expiredItems,
+      }),
+    [
+      annual,
+      belowOrEqual,
+      income,
+      incomeReviews,
+      expiredItems,
+      missingItems,
+      needsReview,
+      session.docs,
+      suspiciousFields,
+      unresolvedCitationWarnings,
+    ],
+  );
 
   const jsonExport = {
     generatedAt: TODAY,
-    householdSize: session.householdSize,
+    householdSize,
     frequency: session.frequency,
-    fields: fields.map((f) => ({
+    household_id: session.sessionId,
+    annualized_income: Number.isNaN(annual) ? null : annual,
+    comparison: Number.isNaN(annual)
+      ? "no_frozen_threshold"
+      : belowOrEqual
+        ? "below_or_equal"
+        : "above",
+    readiness_status: reviewerHandoff.readinessStatus,
+    readiness_reasons: reviewerHandoff.openItems,
+    missing_items: reviewerHandoff.missingItems,
+    expired_items: reviewerHandoff.expiredItems,
+    fields: trustedFields.map((f) => ({
       fieldName: f.label,
       value: f.corrected ?? f.value,
       originalValue: f.value,
@@ -71,26 +423,69 @@ function PacketPage() {
       confirmed: f.confirmed,
       corrected: !!f.corrected,
     })),
+    suspiciousText: suspiciousFields.map((f) => ({
+      label: f.label,
+      value: f.value,
+      source: DOC_LABELS[f.sourceDoc],
+      pageNumber: f.sourcePage,
+      bbox: f.bbox,
+      ignored: true,
+      editable: false,
+      confirmable: false,
+    })),
     rule: {
-      source: THRESHOLD.source,
-      valueUsed: THRESHOLD.label,
-      thresholdAmount: THRESHOLD.amount,
-      effectiveDate: THRESHOLD.effective,
-      page: THRESHOLD.page,
-      url: THRESHOLD.url,
+      source: threshold.source,
+      valueUsed: threshold.label,
+      thresholdAmount: threshold.amount,
+      effectiveDate: threshold.effective,
+      page: threshold.page,
+      url: threshold.url,
+      pageUrl: pdfPageUrl(threshold.url, threshold.page),
+      evidenceMode: referenceEvidence.fetchedWithTavily
+        ? "tavily_extract_allowlisted_hud_urls"
+        : referenceEvidence.evidenceMode === "loading"
+          ? "checking_live_hud_reference"
+          : "frozen_local_hud_reference",
     },
+    evidence: boundedEvidence.map((chunk) => ({
+      id: chunk.id,
+      sourceType: chunk.sourceType,
+      sourceUrl: chunk.sourceUrl,
+      sourceDocId: chunk.sourceDocId,
+      page: chunk.page,
+      locator: chunk.locator,
+      text: chunk.text,
+    })),
+    claims,
+    citationVerification,
+    verificationSummary,
+    reviewerHandoff,
     calculation: {
+      ruleEffectiveDate: threshold.effective,
+      errors: income.errors,
+      incomeSourceReviews: incomeReviews.map((review) => ({
+        id: review.id,
+        documentIds: review.documentIds,
+        documents: review.documentIds
+          .map((id) => session.docs.find((doc) => doc.id === id)?.fileName)
+          .filter(Boolean),
+        reason: review.reason,
+        confidence: review.confidence,
+        choice: review.choice ?? null,
+        choiceLabel: incomeReviewChoiceLabel(review.choice),
+        canonicalValues: review.canonical ?? null,
+        timeline: buildIncomeSourceTimeline(session, review),
+      })),
       contributions: income.contributions.map((c) => ({
         label: c.label,
         formula: c.formula,
         amount: c.amount,
+        documentIds: c.documentIds,
       })),
       annualizedIncome: Number.isNaN(annual) ? null : annual,
-      comparison: Number.isNaN(annual)
-        ? "unavailable"
-        : belowOrEqual
-          ? "below_or_equal"
-          : "above",
+      comparison: Number.isNaN(annual) ? "unavailable" : belowOrEqual ? "below_or_equal" : "above",
+      readiness_status: reviewerHandoff.readinessStatus,
+      readiness_reasons: reviewerHandoff.openItems,
     },
   };
 
@@ -106,15 +501,17 @@ function PacketPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    recordAudit("packet_export", { route: "/packet", status: "json" });
+    finalizePacket({ status: "json" });
     setAnnouncement("JSON packet downloaded to your device.");
   }
 
   function applicantName(): string {
-    const f = fields.find((x) => /name/i.test(x.label));
+    const f = trustedFields.find((x) => /name/i.test(x.label));
     return f ? (f.corrected ?? f.value) : "—";
   }
   function applicantAddress(): string {
-    const f = fields.find((x) => /address/i.test(x.label));
+    const f = trustedFields.find((x) => /address/i.test(x.label));
     return f ? (f.corrected ?? f.value) : "—";
   }
 
@@ -189,12 +586,9 @@ function PacketPage() {
         pageH - footerH + 14,
         { maxWidth: contentW - 120 },
       );
-      doc.text(
-        `${packetId}   •   Page ${pageNum} of ${total}`,
-        pageW - M,
-        pageH - footerH + 14,
-        { align: "right" },
-      );
+      doc.text(`${packetId}   •   Page ${pageNum} of ${total}`, pageW - M, pageH - footerH + 14, {
+        align: "right",
+      });
     };
 
     const ensure = (need: number) => {
@@ -222,10 +616,7 @@ function PacketPage() {
       opts?: { bold?: boolean; muted?: boolean; size?: number; italic?: boolean },
     ) => {
       const size = opts?.size ?? 10;
-      doc.setFont(
-        "times",
-        opts?.italic ? "italic" : opts?.bold ? "bold" : "normal",
-      );
+      doc.setFont("times", opts?.italic ? "italic" : opts?.bold ? "bold" : "normal");
       doc.setFontSize(size);
       setText(opts?.muted ? MUTED : INK);
       const lines = doc.splitTextToSize(text, contentW);
@@ -350,7 +741,7 @@ function PacketPage() {
     setText(BLACK);
     doc.setFont("times", "bold");
     doc.setFontSize(12);
-    doc.text(String(session.householdSize), rightX, y + 38, { align: "right" });
+    doc.text(String(householdSize), rightX, y + 38, { align: "right" });
     setText(MUTED);
     doc.setFont("times", "normal");
     doc.setFontSize(9);
@@ -362,8 +753,8 @@ function PacketPage() {
 
     y += cardH + 22;
 
-    // ---------- eligibility summary ----------
-    sectionHeader("Eligibility summary");
+    // ---------- readiness summary ----------
+    sectionHeader("Readiness summary");
 
     const eligibleLabel = Number.isNaN(annual)
       ? "UNAVAILABLE — missing confirmed income"
@@ -389,25 +780,52 @@ function PacketPage() {
     setText(MUTED);
     doc.setFont("times", "normal");
     doc.setFontSize(9);
-    doc.text(
-      `Threshold  ${currency(THRESHOLD.amount)}   (${THRESHOLD.label})`,
-      M + 16,
-      y + 72,
-    );
+    doc.text(`Threshold  ${currency(threshold.amount)}   (${threshold.label})`, M + 16, y + 70);
+    doc.text(`Rule effective date  ${threshold.effective}`, M + 16, y + 82);
     setText(BLACK);
     doc.setFont("times", "bold");
     doc.setFontSize(10);
-    doc.text(eligibleLabel, M + 16, y + 88);
+    doc.text(eligibleLabel, M + 16, y + 94);
 
     y += summaryH + 24;
+
+    // ---------- reviewer handoff ----------
+    sectionHeader("Reviewer Handoff");
+    kv2col([
+      ["Status", reviewerHandoff.readinessStatus],
+      [
+        "Annualized income",
+        reviewerHandoff.annualizedIncome === null
+          ? "Unavailable"
+          : currency(reviewerHandoff.annualizedIncome),
+      ],
+      ["Threshold comparison", reviewerHandoff.thresholdComparison],
+      [
+        "Income-source decisions",
+        reviewerHandoff.incomeSourceDecisions.length === 0
+          ? "No duplicate income groups found"
+          : reviewerHandoff.incomeSourceDecisions.map((item) => item.choiceLabel).join("; "),
+      ],
+    ]);
+    if (reviewerHandoff.openItems.length === 0) {
+      body("Open review items: none.", { size: 9, muted: true });
+    } else {
+      body("Open review items:", { size: 9, bold: true });
+      reviewerHandoff.openItems.forEach((item) => body(`- ${item}`, { size: 9, muted: true }));
+    }
+    body(reviewerHandoff.decisionBoundary, { size: 9, muted: true });
 
     // ---------- calculation breakdown ----------
     sectionHeader("Calculation breakdown");
     if (Number.isNaN(annual)) {
-      body("Calculation unavailable — missing confirmed income or frequency.", {
-        italic: true,
-        muted: true,
-      });
+      if (income.errors.length > 0) {
+        income.errors.forEach((error) => body(error, { italic: true, muted: true }));
+      } else {
+        body("Calculation unavailable — missing confirmed income or frequency.", {
+          italic: true,
+          muted: true,
+        });
+      }
     } else {
       table(
         [
@@ -426,6 +844,31 @@ function PacketPage() {
       doc.text("ANNUALIZED INCOME", M + 8, y + 16, { charSpace: 1 });
       doc.text(currency(annual), M + contentW - 8, y + 16, { align: "right" });
       y += 32;
+      body(`Rule effective date: ${threshold.effective}`, { size: 9, muted: true });
+    }
+
+    if (incomeReviews.length > 0) {
+      sectionHeader("Income source handling");
+      incomeReviews.forEach((review) => {
+        const files = review.documentIds
+          .map((id) => session.docs.find((doc) => doc.id === id)?.fileName)
+          .filter(Boolean)
+          .join(", ");
+        body(`${incomeReviewChoiceLabel(review.choice)}: ${files}`, {
+          size: 9,
+          muted: review.choice === "needs_manual_review",
+        });
+        if (review.canonical?.confirmed) {
+          body(
+            `Canonical values used: ${review.canonical.weeklyHours ?? "unknown"} hrs/wk at ${review.canonical.hourlyRate ?? "unknown"}. Gross ${review.canonical.grossPay ?? "unknown"}; net ${review.canonical.netPay ?? "unknown"}.`,
+            { size: 8, muted: true },
+          );
+        }
+        body(review.reason, { size: 8, muted: true });
+        buildIncomeSourceTimeline(session, review).forEach((event) => {
+          body(`${event.title}: ${event.detail}`, { size: 8, muted: true });
+        });
+      });
     }
 
     // ---------- document checklist ----------
@@ -463,7 +906,7 @@ function PacketPage() {
 
     // ---------- confirmed values ----------
     sectionHeader("Confirmed values");
-    if (fields.length === 0) {
+    if (trustedFields.length === 0) {
       body("No values on record.", { italic: true, muted: true });
     } else {
       table(
@@ -473,7 +916,7 @@ function PacketPage() {
           { header: "Source", width: contentW * 0.28 },
           { header: "Conf.", width: contentW * 0.12, align: "right" },
         ],
-        fields.map((f) => [
+        trustedFields.map((f) => [
           f.label + (f.corrected ? "  (corrected)" : ""),
           f.corrected ?? f.value,
           `${DOC_LABELS[f.sourceDoc]}, p.${f.sourcePage}`,
@@ -484,20 +927,48 @@ function PacketPage() {
 
     if (needsReview.length > 0) {
       sectionHeader("Items still needing review");
-      needsReview.forEach((f) =>
-        body(`•  ${f.label} — ${f.corrected ?? f.value}`, { size: 10 }),
+      needsReview.forEach((f) => body(`•  ${f.label} — ${f.corrected ?? f.value}`, { size: 10 }));
+      y += 4;
+    }
+
+    if (suspiciousFields.length > 0) {
+      sectionHeader("Safety warnings");
+      suspiciousFields.forEach((f) =>
+        body(
+          `Ignored suspicious text from ${DOC_LABELS[f.sourceDoc]}, page ${f.sourcePage}: ${f.value}`,
+          { size: 9, muted: true },
+        ),
       );
+      y += 4;
+    }
+
+    if (failedVerifications.length > 0) {
+      sectionHeader("Source check warnings");
+      failedVerifications.forEach((verification) => {
+        const claim = claimById.get(verification.claimId);
+        body(
+          `${claim?.label ?? verification.claimId}: cited evidence did not contain "${claim?.value ?? "the claimed value"}".`,
+          { size: 9, muted: true },
+        );
+      });
       y += 4;
     }
 
     sectionHeader("Reference source");
     kv2col([
-      ["Source", THRESHOLD.source],
-      ["Value used", `${THRESHOLD.label} = ${currency(THRESHOLD.amount)}`],
-      ["Effective", THRESHOLD.effective],
-      ["Page", String(THRESHOLD.page)],
-      ["URL", THRESHOLD.url],
+      ["Source", threshold.source],
+      ["Evidence mode", evidenceModeLabel],
+      ["Value used", `${threshold.label} = ${currency(threshold.amount)}`],
+      ["Effective", threshold.effective],
+      ["Page", String(threshold.page)],
+      ["URL", pdfPageUrl(threshold.url, threshold.page)],
     ]);
+    if (referenceEvidence.chunks.length > 0) {
+      body(`Reference evidence: ${referenceEvidence.chunks[0].text}`, {
+        size: 9,
+        muted: true,
+      });
+    }
 
     sectionHeader("How this packet was produced");
     body(
@@ -517,6 +988,8 @@ function PacketPage() {
   function downloadPdf() {
     const pdf = buildPdf();
     pdf.save("rentsmooth-packet.pdf");
+    recordAudit("packet_export", { route: "/packet", status: "pdf" });
+    finalizePacket({ status: "pdf" });
     setAnnouncement("PDF packet downloaded to your device.");
   }
 
@@ -526,8 +999,11 @@ function PacketPage() {
       const blob = pdf.output("blob");
       const url = URL.createObjectURL(blob);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
+      lastFocusedBeforePreviewRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setPreviewUrl(url);
       setPreview(true);
+      finalizePacket({ status: "preview" });
       setAnnouncement("Packet preview ready.");
     } catch (e) {
       console.error("Preview failed", e);
@@ -535,10 +1011,83 @@ function PacketPage() {
     }
   }
 
+  function closePdfPreview() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreview(false);
+    setPreviewUrl(null);
+    window.requestAnimationFrame(() => {
+      lastFocusedBeforePreviewRef.current?.focus();
+    });
+  }
 
+  function handlePreviewKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closePdfPreview();
+      return;
+    }
+    if (e.key !== "Tab" || !dialogRef.current) return;
+
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true");
+
+    if (focusable.length === 0) {
+      e.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  function reviewCitationWarning(claimId: string) {
+    setReviewedCitationIds((current) => new Set([...current, claimId]));
+    recordAudit("source_warning_review", { route: "/packet", status: "reviewed" });
+    setAnnouncement("Source warning marked reviewed.");
+  }
+
+  function jumpToClaimSource(claimId: string) {
+    const field = fieldByClaimId.get(claimId);
+    if (field) {
+      document.getElementById(`field-${field.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      setAnnouncement(`${field.label} is ready to review.`);
+      return;
+    }
+    if (claimId.startsWith("hud-")) {
+      window.open(pdfPageUrl(threshold.url, threshold.page), "_blank", "noreferrer");
+      setAnnouncement("HUD source opened in a new tab.");
+      return;
+    }
+    document.getElementById("sources-used")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setAnnouncement("Source details are ready to review.");
+  }
 
   function deletePacket() {
-    setSession((s) => ({ ...s, docs: [] }));
+    setSession((s) => ({
+      ...s,
+      docs: [],
+      incomeSourceReviews: [],
+      packetGeneratedAt: undefined,
+    }));
+    recordAudit("packet_delete", { route: "/packet", status: "deleted" });
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    setPreview(false);
     setAnnouncement("Packet deleted. Your session is empty.");
   }
 
@@ -563,12 +1112,51 @@ function PacketPage() {
           <Download className="h-4 w-4" aria-hidden="true" />
           Download PDF
         </button>
-
       </div>
 
       <Section title="Renter information">
-        <KV k="Household size" v={String(session.householdSize)} />
+        <KV k="Household size" v={String(householdSize)} />
         <KV k="Session started" v={new Date(session.startedAt).toLocaleString()} />
+      </Section>
+
+      <Section title="Reviewer Handoff">
+        <div className="rounded-md border bg-card px-3 py-3">
+          <dl className="space-y-1.5 text-sm">
+            <Row k="Status" v={reviewerHandoff.readinessStatus} />
+            <Row
+              k="Annualized income"
+              v={
+                reviewerHandoff.annualizedIncome === null
+                  ? "Unavailable"
+                  : currency(reviewerHandoff.annualizedIncome)
+              }
+            />
+            <Row k="Threshold comparison" v={reviewerHandoff.thresholdComparison} />
+            <Row
+              k="Income-source decisions"
+              v={
+                reviewerHandoff.incomeSourceDecisions.length === 0
+                  ? "No duplicate income groups found"
+                  : reviewerHandoff.incomeSourceDecisions.map((item) => item.choiceLabel).join("; ")
+              }
+            />
+          </dl>
+          <div className="mt-3 border-t pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Open review items
+            </p>
+            {reviewerHandoff.openItems.length === 0 ? (
+              <p className="mt-1 text-sm font-medium text-emerald-800">No open review items.</p>
+            ) : (
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900">
+                {reviewerHandoff.openItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-xs text-muted-foreground">{reviewerHandoff.decisionBoundary}</p>
+          </div>
+        </div>
       </Section>
 
       <Section title="Document checklist">
@@ -602,14 +1190,17 @@ function PacketPage() {
       </Section>
 
       <Section title="Confirmed income information">
-        {fields.length === 0 ? (
+        {trustedFields.length === 0 ? (
           <p className="text-sm text-muted-foreground">No values on record yet.</p>
         ) : (
           <ul className="space-y-2 text-sm">
-            {fields.map((f) => (
+            {trustedFields.map((f) => (
               <li
                 key={f.id}
-                className="flex flex-col gap-1.5 rounded-md border bg-card px-3 py-3"
+                id={`field-${f.id}`}
+                data-field-key={f.key}
+                tabIndex={-1}
+                className="scroll-mt-24 flex flex-col gap-1.5 rounded-md border bg-card px-3 py-3"
               >
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {f.label}
@@ -627,22 +1218,148 @@ function PacketPage() {
               </li>
             ))}
           </ul>
-
         )}
       </Section>
 
+      {suspiciousFields.length > 0 && (
+        <Section title="Safety warnings">
+          <ul className="space-y-2 text-sm">
+            {suspiciousFields.map((f) => (
+              <li
+                key={f.id}
+                className="rounded-md border border-red-600/40 bg-red-50 px-3 py-3 text-red-950"
+              >
+                <p className="text-sm font-semibold">Suspicious text was found and ignored</p>
+                <p className="mt-1 rounded-md border border-red-200 bg-white p-2 font-mono text-xs">
+                  {f.value}
+                </p>
+                <p className="mt-2 text-xs text-red-900/80">
+                  This item cannot be edited, confirmed, or used in calculations. Source:{" "}
+                  {DOC_LABELS[f.sourceDoc]}, page {f.sourcePage}.
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {failedVerifications.length > 0 && (
+        <Section title="Source check warnings">
+          <ul className="space-y-2 text-sm">
+            {failedVerifications.map((verification) => {
+              const claim = claimById.get(verification.claimId);
+              const field = fieldByClaimId.get(verification.claimId);
+              const reviewed = reviewedCitationIds.has(verification.claimId);
+              return (
+                <li
+                  key={verification.claimId}
+                  className={
+                    "rounded-md border px-3 py-3 " +
+                    (reviewed
+                      ? "border-emerald-700/30 bg-emerald-50 text-emerald-950"
+                      : "border-amber-600/40 bg-amber-50 text-amber-950")
+                  }
+                >
+                  <p className="flex items-center gap-1.5 font-semibold">
+                    {reviewed ? (
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {claim?.label ?? verification.claimId}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    The cited evidence did not contain "{claim?.value ?? "the claimed value"}".
+                    {field
+                      ? " Review the field value below, then edit it if needed or mark this warning reviewed."
+                      : " Review the source, then mark this warning reviewed if it is acceptable."}
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => jumpToClaimSource(verification.claimId)}
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-current/30 px-3 text-xs font-semibold hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      {field ? "Review field" : "Review source"}
+                    </button>
+                    {!reviewed && (
+                      <button
+                        type="button"
+                        onClick={() => reviewCitationWarning(verification.claimId)}
+                        className="inline-flex h-10 items-center justify-center rounded-md bg-amber-900 px-3 text-xs font-semibold text-white hover:bg-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        Mark reviewed
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
+      {referenceEvidence.warnings.length > 0 && (
+        <Section title="Retrieval warnings">
+          <ul className="space-y-2 text-sm">
+            {referenceEvidence.warnings.map((warning) => (
+              <li
+                key={warning}
+                className="rounded-md border border-amber-600/40 bg-amber-50 px-3 py-3 text-amber-950"
+              >
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {incomeReviews.length > 0 && (
+        <Section title="Income source handling">
+          <ul className="space-y-2 text-sm">
+            {incomeReviews.map((review) => {
+              const files = review.documentIds
+                .map((id) => session.docs.find((doc) => doc.id === id)?.fileName)
+                .filter(Boolean)
+                .join(", ");
+              return (
+                <li key={review.id} className="rounded-md border bg-card px-3 py-3">
+                  <p className="font-semibold">{incomeReviewChoiceLabel(review.choice)}</p>
+                  <p className="mt-1 text-muted-foreground">{files}</p>
+                  {review.canonical?.confirmed && (
+                    <p className="mt-1 text-xs font-medium text-foreground">
+                      Using canonical values: {review.canonical.weeklyHours ?? "unknown"} hrs/wk at{" "}
+                      {review.canonical.hourlyRate ?? "unknown"}. Gross{" "}
+                      {review.canonical.grossPay ?? "unknown"}; net{" "}
+                      {review.canonical.netPay ?? "unknown"}.
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">{review.reason}</p>
+                  <IncomeSourceTimeline session={session} review={review} compact />
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
       <Section title="Calculation details">
         {Number.isNaN(annual) ? (
-          <p className="text-sm text-destructive font-medium">
-            Calculation unavailable — missing confirmed income or frequency.
-          </p>
+          <div className="space-y-1 text-sm text-destructive font-medium">
+            {income.errors.length > 0 ? (
+              income.errors.map((error) => <p key={error}>{error}</p>)
+            ) : (
+              <p>Calculation unavailable — missing confirmed income or frequency.</p>
+            )}
+          </div>
         ) : (
           <dl className="space-y-1.5 text-sm">
             {income.contributions.map((c, i) => (
               <Row key={i} k={c.label} v={`${c.formula} = ${currency(c.amount)} / year`} />
             ))}
             <Row k="Annualized income" v={currency(annual)} />
-            <Row k="Threshold" v={currency(THRESHOLD.amount)} />
+            <Row k="Threshold" v={currency(threshold.amount)} />
+            <Row k="Rule effective date" v={threshold.effective} />
             <Row
               k="Comparison"
               v={belowOrEqual ? "Below or equal to threshold" : "Above threshold"}
@@ -652,41 +1369,48 @@ function PacketPage() {
       </Section>
 
       <Section title="Items that need review">
-        {needsReview.length === 0 ? (
+        {reviewerHandoff.openItems.length === 0 ? (
           <p className="inline-flex items-center gap-1 text-sm font-medium text-emerald-800">
             <Check className="h-4 w-4" aria-hidden="true" />
-            Everything is confirmed.
+            Everything is confirmed and source checks are clear.
           </p>
         ) : (
           <ul className="list-disc space-y-1 pl-5 text-sm">
-            {needsReview.map((f) => (
-              <li key={f.id}>
-                {f.label} — {f.corrected ?? f.value}
-              </li>
+            {reviewerHandoff.openItems.map((item) => (
+              <li key={item}>{item}</li>
             ))}
           </ul>
         )}
       </Section>
 
-      <Section title="Sources used">
+      <Section title="Sources used" id="sources-used">
         <dl className="space-y-1.5 text-sm">
-          <Row k="Source" v={THRESHOLD.source} />
-          <Row k="Value used" v={`${THRESHOLD.label} = ${currency(THRESHOLD.amount)}`} />
-          <Row k="Effective" v={THRESHOLD.effective} />
-          <Row k="Page" v={String(THRESHOLD.page)} />
+          <Row k="Source" v={threshold.source} />
+          <Row k="Evidence mode" v={evidenceModeLabel} />
+          <Row k="Value used" v={`${threshold.label} = ${currency(threshold.amount)}`} />
+          <Row k="Effective" v={threshold.effective} />
+          <Row k="Page" v={String(threshold.page)} />
           <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
             <dt className="text-muted-foreground">URL</dt>
             <dd className="break-all sm:text-right">
               <a
-                href={THRESHOLD.url}
+                href={pdfPageUrl(threshold.url, threshold.page)}
                 target="_blank"
                 rel="noreferrer"
                 className="text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                {THRESHOLD.url}
+                {pdfPageUrl(threshold.url, threshold.page)}
               </a>
             </dd>
           </div>
+          {referenceEvidence.chunks.length > 0 && (
+            <Row k="Evidence snippet" v={referenceEvidence.chunks[0].text} />
+          )}
+          <Row
+            k="Bounded evidence chunks"
+            v={`${boundedEvidence.length} total: ${uploadedEvidence.length} uploaded-document, ${referenceEvidence.chunks.length} HUD reference`}
+          />
+          <Row k="Source checks" v={sourceCheckSummary} />
         </dl>
       </Section>
 
@@ -741,14 +1465,16 @@ function PacketPage() {
 
       {preview && previewUrl && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="preview-title"
+          aria-describedby="preview-keyboard-help"
           className="fixed inset-0 z-50 flex flex-col bg-black/60 p-0 sm:p-4"
+          onKeyDown={handlePreviewKeyDown}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setPreview(false);
-              setPreviewUrl(null);
+              closePdfPreview();
             }
           }}
         >
@@ -757,6 +1483,10 @@ function PacketPage() {
               <h2 id="preview-title" className="font-serif text-lg font-semibold">
                 Packet preview
               </h2>
+              <p id="preview-keyboard-help" className="sr-only">
+                Packet preview dialog showing the generated PDF. Use Tab to move through preview
+                actions, and Escape to close.
+              </p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -766,12 +1496,17 @@ function PacketPage() {
                   <Download className="h-4 w-4" aria-hidden="true" />
                   Download PDF
                 </button>
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  Open in new tab
+                </a>
                 <button
                   type="button"
-                  onClick={() => {
-                    setPreview(false);
-                    setPreviewUrl(null);
-                  }}
+                  onClick={closePdfPreview}
                   className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
@@ -779,22 +1514,16 @@ function PacketPage() {
                 </button>
               </div>
             </div>
-            <iframe
-              title="Packet PDF preview"
-              src={previewUrl}
-              className="h-full w-full flex-1 bg-muted"
-            />
+            <div className="min-h-0 flex-1 bg-muted">
+              <iframe
+                src={previewUrl}
+                title="Generated PDF packet preview"
+                className="h-full min-h-[70vh] w-full border-0 bg-white"
+              />
+            </div>
             <div className="border-t bg-card px-4 py-2 text-xs text-muted-foreground">
-              If the preview does not render,{" "}
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-primary underline underline-offset-2"
-              >
-                open the PDF in a new tab
-              </a>
-              .
+              This is the generated PDF packet. Use Open in new tab if your browser blocks embedded
+              PDF viewing.
             </div>
           </div>
         </div>
@@ -803,9 +1532,17 @@ function PacketPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  id,
+}: {
+  title: string;
+  children: React.ReactNode;
+  id?: string;
+}) {
   return (
-    <section className="mt-6">
+    <section id={id} className="mt-6 scroll-mt-24">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h2>
@@ -832,11 +1569,26 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
-function ChecklistBadge({
-  state,
-}: {
-  state: "ok" | "expired" | "missing" | "skipped";
-}) {
+function readPendingFieldFocus(path: string): { fieldKey: string } | null {
+  const raw = window.sessionStorage.getItem(PENDING_FIELD_FOCUS_KEY);
+  if (!raw) return null;
+  try {
+    const pending = JSON.parse(raw) as { path?: unknown; fieldKey?: unknown };
+    if (pending.path !== path || typeof pending.fieldKey !== "string") return null;
+    window.sessionStorage.removeItem(PENDING_FIELD_FOCUS_KEY);
+    return { fieldKey: pending.fieldKey };
+  } catch {
+    window.sessionStorage.removeItem(PENDING_FIELD_FOCUS_KEY);
+    return null;
+  }
+}
+
+function fieldElementByKey(fieldKey: string): HTMLElement | null {
+  const elements = document.querySelectorAll<HTMLElement>("[data-field-key]");
+  return Array.from(elements).find((el) => el.dataset.fieldKey === fieldKey) ?? null;
+}
+
+function ChecklistBadge({ state }: { state: "ok" | "expired" | "missing" | "skipped" }) {
   const map = {
     ok: {
       cls: "border-emerald-700/40 bg-emerald-50 text-emerald-900",

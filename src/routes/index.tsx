@@ -87,8 +87,8 @@ function Home() {
               </p>
               <p>
                 <strong className="text-foreground">Your data stays yours.</strong> Processing
-                is ephemeral, documents are never used to train AI, and you can delete this
-                session at any time.
+                is ephemeral, local persisted data is stored only for this browser session,
+                documents are never used to train AI, and you can delete this session at any time.
               </p>
             </div>
             <button

@@ -1,5 +1,6 @@
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { validateNumericField } from "@/lib/income-validation";
 import { useSession, type ExtractedField } from "@/lib/session-store";
 
 interface Props {
@@ -59,14 +60,26 @@ export function EditableValue({ field, size = "md", onSaved, ariaLabel }: Props)
       setError("Value cannot be empty.");
       return;
     }
+    const validation = validateNumericField(field.key, next);
+    if (!validation.ok) {
+      setError(validation.error ?? "Value is not valid.");
+      return;
+    }
+    const savedValue = validation.normalized ?? next;
     if (next === current) {
       cancel();
       return;
     }
-    confirmField(field.id, next);
-    setAnnouncement(`${field.label} changed from ${current} to ${next}.`);
-    onSaved?.(next);
+    confirmField(field.id, savedValue);
+    setAnnouncement(`${field.label} changed from original value ${field.value} to ${savedValue}.`);
+    onSaved?.(savedValue);
     setEditing(false);
+  }
+
+  function revertToOriginal() {
+    confirmField(field.id, undefined);
+    setAnnouncement(`${field.label} reverted to original value ${field.value}.`);
+    onSaved?.(field.value);
   }
 
   if (editing) {
@@ -124,9 +137,7 @@ export function EditableValue({ field, size = "md", onSaved, ariaLabel }: Props)
             {error}
           </p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">
-          Press Enter to save, Escape to cancel.
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Press Enter to save, Escape to cancel.</p>
       </div>
     );
   }
@@ -161,11 +172,22 @@ export function EditableValue({ field, size = "md", onSaved, ariaLabel }: Props)
         </button>
       </div>
       {wasCorrected && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Changed</span> from{" "}
-          <span className="line-through">{field.value}</span> to{" "}
-          <span className="font-semibold text-foreground">{field.corrected}</span>
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Changed</span> from{" "}
+            <span className="line-through">{field.value}</span> to{" "}
+            <span className="font-semibold text-foreground">{field.corrected}</span>
+          </p>
+          <button
+            type="button"
+            onClick={revertToOriginal}
+            className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input px-2 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label={`Revert ${ariaLabel ?? field.label} to original value ${field.value}`}
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            Revert to original
+          </button>
+        </div>
       )}
       {/* Screen reader announcement for edits */}
       <span role="status" aria-live="polite" className="sr-only">

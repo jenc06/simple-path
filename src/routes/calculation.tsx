@@ -1,9 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 
-import { THRESHOLD, computeAnnualIncome, useSession } from "@/lib/session-store";
+import {
+  computeAnnualIncome,
+  effectiveHouseholdSize,
+  thresholdForHouseholdSize,
+  useSession,
+} from "@/lib/session-store";
+import { fetchReferenceEvidence, frozenReferenceEvidence } from "@/lib/reference-evidence";
 
 export const Route = createFileRoute("/calculation")({
   head: () => ({
@@ -16,15 +22,41 @@ function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function pdfPageUrl(url: string, page: number) {
+  return `${url}#page=${page}`;
+}
+
 function CalculationPage() {
   const { session } = useSession();
   const navigate = useNavigate();
   const [announcement, setAnnouncement] = useState("");
+  const [referenceEvidence, setReferenceEvidence] = useState(() =>
+    frozenReferenceEvidence(effectiveHouseholdSize(session)),
+  );
 
   const result = useMemo(() => computeAnnualIncome(session), [session]);
+  const householdSize = useMemo(() => effectiveHouseholdSize(session), [session]);
+  const threshold = useMemo(
+    () => thresholdForHouseholdSize(householdSize),
+    [householdSize],
+  );
 
-  const belowOrEqual = result.annual <= THRESHOLD.amount;
-  const hasBlockingError = result.errors.length > 0 && result.contributions.length === 0;
+  const belowOrEqual = result.annual <= threshold.amount;
+  const hasIncomeSourceBlock = result.errors.some(
+    (error) => error.includes("duplicate income") || error.includes("manual review"),
+  );
+  const hasBlockingError =
+    hasIncomeSourceBlock || (result.errors.length > 0 && result.contributions.length === 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchReferenceEvidence(householdSize).then((evidence) => {
+      if (!cancelled) setReferenceEvidence(evidence);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [householdSize]);
 
   return (
     <PageShell title="Calculation" step="Annualize and compare">
@@ -55,7 +87,10 @@ function CalculationPage() {
       ) : (
         <>
           <section aria-labelledby="calc" className="rounded-2xl border bg-card p-5 shadow-sm">
-            <h2 id="calc" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            <h2
+              id="calc"
+              className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
+            >
               Your annualized income
             </h2>
             <p className="mt-1 text-4xl font-bold tracking-tight">{currency(result.annual)}</p>
@@ -75,7 +110,10 @@ function CalculationPage() {
             </dl>
 
             {result.errors.length > 0 && (
-              <div role="alert" className="mt-4 rounded-md border border-amber-500/60 bg-amber-50 p-3 text-sm text-amber-900">
+              <div
+                role="alert"
+                className="mt-4 rounded-md border border-amber-500/60 bg-amber-50 p-3 text-sm text-amber-900"
+              >
                 <p className="font-semibold">Some sources could not be included:</p>
                 <ul className="mt-1 list-disc pl-5">
                   {result.errors.map((e) => (
@@ -87,14 +125,20 @@ function CalculationPage() {
           </section>
 
           <section aria-labelledby="cmp" className="mt-4 rounded-2xl border bg-card p-5 shadow-sm">
-            <h2 id="cmp" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            <h2
+              id="cmp"
+              className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
+            >
               Comparison to threshold
             </h2>
             <div className="mt-3 flex items-center gap-3">
               <span className="text-2xl font-semibold">{currency(result.annual)}</span>
               <ArrowRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              <span className="text-2xl font-semibold">{currency(THRESHOLD.amount)}</span>
+              <span className="text-2xl font-semibold">{currency(threshold.amount)}</span>
             </div>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              Rule effective date: {threshold.effective}
+            </p>
             <p
               className={
                 "mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold " +
@@ -112,41 +156,58 @@ function CalculationPage() {
           </section>
 
           <section aria-labelledby="src" className="mt-4 rounded-2xl border bg-card p-5 shadow-sm">
-            <h2 id="src" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            <h2
+              id="src"
+              className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
+            >
               Rule source
             </h2>
             <dl className="mt-2 space-y-2 text-sm">
               <div>
                 <dt className="text-muted-foreground">Source</dt>
-                <dd className="font-medium">{THRESHOLD.source}</dd>
+                <dd className="font-medium">{threshold.source}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Evidence mode</dt>
+                <dd className="font-medium">
+                  {referenceEvidence.fetchedWithTavily
+                    ? "Tavily Extract from allowlisted HUD URLs"
+                    : "Frozen local HUD reference"}
+                </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Value used</dt>
                 <dd className="font-medium">
-                  {THRESHOLD.label} = {currency(THRESHOLD.amount)}
+                  {threshold.label} = {currency(threshold.amount)}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Effective date</dt>
-                <dd className="font-medium">{THRESHOLD.effective}</dd>
+                <dd className="font-medium">{threshold.effective}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Page</dt>
-                <dd className="font-medium">{THRESHOLD.page}</dd>
+                <dd className="font-medium">{threshold.page}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">URL</dt>
                 <dd className="break-all">
                   <a
-                    href={THRESHOLD.url}
+                    href={pdfPageUrl(threshold.url, threshold.page)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
-                    {THRESHOLD.url}
+                    {pdfPageUrl(threshold.url, threshold.page)}
                   </a>
                 </dd>
               </div>
+              {referenceEvidence.chunks.length > 0 && (
+                <div>
+                  <dt className="text-muted-foreground">Evidence snippet</dt>
+                  <dd className="font-medium">{referenceEvidence.chunks[0].text}</dd>
+                </div>
+              )}
             </dl>
           </section>
 

@@ -9,31 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UploadRouteImport } from './routes/upload'
-import { Route as ReviewRouteImport } from './routes/review'
-import { Route as PacketRouteImport } from './routes/packet'
-import { Route as ConfirmRouteImport } from './routes/confirm'
-import { Route as CalculationRouteImport } from './routes/calculation'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CalculationRouteImport } from './routes/calculation'
+import { Route as ConfirmRouteImport } from './routes/confirm'
+import { Route as PacketRouteImport } from './routes/packet'
+import { Route as ReviewRouteImport } from './routes/review'
+import { Route as UploadRouteImport } from './routes/upload'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiExtractRouteImport } from './routes/api/extract'
+import { Route as ApiReferenceEvidenceRouteImport } from './routes/api/reference-evidence'
+import { Route as ApiScanRouteImport } from './routes/api/scan'
 
-const UploadRoute = UploadRouteImport.update({
-  id: '/upload',
-  path: '/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReviewRoute = ReviewRouteImport.update({
-  id: '/review',
-  path: '/review',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PacketRoute = PacketRouteImport.update({
-  id: '/packet',
-  path: '/packet',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfirmRoute = ConfirmRouteImport.update({
-  id: '/confirm',
-  path: '/confirm',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CalculationRoute = CalculationRouteImport.update({
@@ -41,9 +30,44 @@ const CalculationRoute = CalculationRouteImport.update({
   path: '/calculation',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ConfirmRoute = ConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PacketRoute = PacketRouteImport.update({
+  id: '/packet',
+  path: '/packet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewRoute = ReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UploadRoute = UploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiExtractRoute = ApiExtractRouteImport.update({
+  id: '/api/extract',
+  path: '/api/extract',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReferenceEvidenceRoute = ApiReferenceEvidenceRouteImport.update({
+  id: '/api/reference-evidence',
+  path: '/api/reference-evidence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiScanRoute = ApiScanRouteImport.update({
+  id: '/api/scan',
+  path: '/api/scan',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -54,6 +78,10 @@ export interface FileRoutesByFullPath {
   '/packet': typeof PacketRoute
   '/review': typeof ReviewRoute
   '/upload': typeof UploadRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/extract': typeof ApiExtractRoute
+  '/api/reference-evidence': typeof ApiReferenceEvidenceRoute
+  '/api/scan': typeof ApiScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +90,10 @@ export interface FileRoutesByTo {
   '/packet': typeof PacketRoute
   '/review': typeof ReviewRoute
   '/upload': typeof UploadRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/extract': typeof ApiExtractRoute
+  '/api/reference-evidence': typeof ApiReferenceEvidenceRoute
+  '/api/scan': typeof ApiScanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +103,10 @@ export interface FileRoutesById {
   '/packet': typeof PacketRoute
   '/review': typeof ReviewRoute
   '/upload': typeof UploadRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/extract': typeof ApiExtractRoute
+  '/api/reference-evidence': typeof ApiReferenceEvidenceRoute
+  '/api/scan': typeof ApiScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,8 +117,22 @@ export interface FileRouteTypes {
     | '/packet'
     | '/review'
     | '/upload'
+    | '/api/chat'
+    | '/api/extract'
+    | '/api/reference-evidence'
+    | '/api/scan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/calculation' | '/confirm' | '/packet' | '/review' | '/upload'
+  to:
+    | '/'
+    | '/calculation'
+    | '/confirm'
+    | '/packet'
+    | '/review'
+    | '/upload'
+    | '/api/chat'
+    | '/api/extract'
+    | '/api/reference-evidence'
+    | '/api/scan'
   id:
     | '__root__'
     | '/'
@@ -91,6 +141,10 @@ export interface FileRouteTypes {
     | '/packet'
     | '/review'
     | '/upload'
+    | '/api/chat'
+    | '/api/extract'
+    | '/api/reference-evidence'
+    | '/api/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -100,36 +154,19 @@ export interface RootRouteChildren {
   PacketRoute: typeof PacketRoute
   ReviewRoute: typeof ReviewRoute
   UploadRoute: typeof UploadRoute
+  ApiChatRoute: typeof ApiChatRoute
+  ApiExtractRoute: typeof ApiExtractRoute
+  ApiReferenceEvidenceRoute: typeof ApiReferenceEvidenceRoute
+  ApiScanRoute: typeof ApiScanRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/upload': {
-      id: '/upload'
-      path: '/upload'
-      fullPath: '/upload'
-      preLoaderRoute: typeof UploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/review': {
-      id: '/review'
-      path: '/review'
-      fullPath: '/review'
-      preLoaderRoute: typeof ReviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/packet': {
-      id: '/packet'
-      path: '/packet'
-      fullPath: '/packet'
-      preLoaderRoute: typeof PacketRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/confirm': {
-      id: '/confirm'
-      path: '/confirm'
-      fullPath: '/confirm'
-      preLoaderRoute: typeof ConfirmRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/calculation': {
@@ -139,11 +176,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalculationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/confirm': {
+      id: '/confirm'
+      path: '/confirm'
+      fullPath: '/confirm'
+      preLoaderRoute: typeof ConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/packet': {
+      id: '/packet'
+      path: '/packet'
+      fullPath: '/packet'
+      preLoaderRoute: typeof PacketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review': {
+      id: '/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof ReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/upload': {
+      id: '/upload'
+      path: '/upload'
+      fullPath: '/upload'
+      preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/extract': {
+      id: '/api/extract'
+      path: '/api/extract'
+      fullPath: '/api/extract'
+      preLoaderRoute: typeof ApiExtractRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/reference-evidence': {
+      id: '/api/reference-evidence'
+      path: '/api/reference-evidence'
+      fullPath: '/api/reference-evidence'
+      preLoaderRoute: typeof ApiReferenceEvidenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/scan': {
+      id: '/api/scan'
+      path: '/api/scan'
+      fullPath: '/api/scan'
+      preLoaderRoute: typeof ApiScanRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -156,7 +242,21 @@ const rootRouteChildren: RootRouteChildren = {
   PacketRoute: PacketRoute,
   ReviewRoute: ReviewRoute,
   UploadRoute: UploadRoute,
+  ApiChatRoute: ApiChatRoute,
+  ApiExtractRoute: ApiExtractRoute,
+  ApiReferenceEvidenceRoute: ApiReferenceEvidenceRoute,
+  ApiScanRoute: ApiScanRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

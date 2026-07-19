@@ -6,9 +6,11 @@ import {
   DATE_CUTOFF,
   DOC_LABELS,
   TODAY,
+  mockFieldsFor,
   useSession,
   type DocType,
 } from "@/lib/session-store";
+
 
 export const Route = createFileRoute("/upload")({
   head: () => ({

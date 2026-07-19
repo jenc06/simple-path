@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Check } from "lucide-react";
 import { useMemo } from "react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell, LiveRegion } from "@/components/page-shell";
+import { EditableValue } from "@/components/editable-value";
+
 import {
   THRESHOLD,
   allFields,

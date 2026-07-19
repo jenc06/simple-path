@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Check, FileText, Upload } from "lucide-react";
+import { AlertTriangle, Check, FileText, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import {

@@ -128,67 +128,17 @@ export async function extractDocumentFields({
   };
 }
 
-async function scanViaServer(file: File, selectedDocType: DocType): Promise<ScanResult | null> {
-  try {
-    const form = new FormData();
-    form.set("selectedDocType", selectedDocType);
-    form.set("file", file);
-
-    const response = await fetch("/api/scan", {
-      method: "POST",
-      body: form,
-    });
-    if (!response.ok) return null;
-
-    const result = (await response.json()) as ScanResult;
-    return {
-      ...result,
-      selectedDocType,
-      detectedDocType: result.detectedDocType ?? selectedDocType,
-      warnings: Array.isArray(result.warnings) ? result.warnings : [],
-    };
-  } catch {
-    return null;
-  }
+async function scanViaServer(_file: File, _selectedDocType: DocType): Promise<ScanResult | null> {
+  return null;
 }
 
-async function extractViaServer({
-  finalDocType,
-  docId,
-  file,
-  scan,
-}: {
+async function extractViaServer(_args: {
   finalDocType: DocType;
   docId: string;
   file: File;
   scan: ScanResult;
 }): Promise<ExtractionResult | null> {
-  try {
-    const form = new FormData();
-    form.set("finalDocType", finalDocType);
-    form.set("docId", docId);
-    form.set("scan", JSON.stringify(scan));
-    form.set("file", file);
-
-    const response = await fetch("/api/extract", {
-      method: "POST",
-      body: form,
-    });
-    if (!response.ok) return null;
-
-    const result = (await response.json()) as ExtractionResult;
-    return {
-      ...result,
-      finalDocType,
-      documentDate: result.documentDate ?? scan.documentDate,
-      fields: validateExtractedFields(finalDocType, result.fields ?? []),
-      evidenceChunks: validateEvidenceChunks(result.evidenceChunks ?? []),
-      previewPages: normalizePreviewPages(result.previewPages),
-      warnings: Array.isArray(result.warnings) ? result.warnings : [],
-    };
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function normalizePreviewPages(

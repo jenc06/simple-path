@@ -140,6 +140,14 @@ function UploadPage() {
     fileInputRef.current?.click();
   }
 
+  function browserPreviewPages(file: File, fields: ExtractedField[]) {
+    if (typeof URL === "undefined" || file.type !== "application/pdf") return {};
+    const url = URL.createObjectURL(file);
+    const pages = new Set(fields.map((field) => field.sourcePage).filter((page) => page > 0));
+    if (pages.size === 0) pages.add(1);
+    return Object.fromEntries([...pages].map((page) => [page, url])) as Record<number, string>;
+  }
+
   async function extractAndMaybeAdd({
     docId,
     file,
@@ -167,7 +175,10 @@ function UploadPage() {
       status: extraction.fields.length > 0 ? "fields_extracted" : "no_fields",
     });
     const fields = extraction.fields;
-    const previewPages = extraction.previewPages ?? {};
+    const previewPages =
+      extraction.previewPages && Object.keys(extraction.previewPages).length > 0
+        ? extraction.previewPages
+        : browserPreviewPages(file, fields);
     const evidenceChunks = extraction.evidenceChunks ?? [];
     const date =
       extraction.documentDate ??
@@ -279,6 +290,9 @@ function UploadPage() {
           break;
         }
       }
+    } catch (error) {
+      setAnnouncement(extractionFailureMessage(error));
+      return;
     } finally {
       setIsExtracting(false);
     }
@@ -339,9 +353,22 @@ function UploadPage() {
           `${pending.fileName} needs your confirmation because it may be too old.${warningText}`,
         );
       }
+    } catch (error) {
+      setAnnouncement(extractionFailureMessage(error));
     } finally {
       setIsExtracting(false);
     }
+  }
+
+  function extractionFailureMessage(error: unknown) {
+    const detail = error instanceof Error ? error.message : "";
+    return [
+      "Document extraction is unavailable right now. The deployed app needs the PDF extractor service to read and preview uploaded documents.",
+      detail,
+      "Check EXTRACTOR_SERVICE_URL in Vercel, then retry the upload.",
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   function skipApplication() {

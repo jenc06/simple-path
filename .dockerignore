@@ -1,0 +1,9 @@
+node_modules
+.output
+.wrangler
+tmp
+output
+.env
+.env.*
+.git
+*.log

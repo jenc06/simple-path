@@ -12,6 +12,7 @@ export function DocPreview({ field }: { field: ExtractedField }) {
   const box = visibleBox(field.bbox);
   const zoomPct = Math.round(zoom * 100);
   const isUntrusted = field.category === "untrusted";
+  const previewKind = previewSourceKind(field.previewImage);
   const highlightClass = "border-amber-600 bg-amber-300/20 shadow-[0_0_0_3px_rgba(217,119,6,0.22)]";
 
   return (
@@ -60,8 +61,14 @@ export function DocPreview({ field }: { field: ExtractedField }) {
           className={"relative min-w-full " + (field.previewImage ? "" : "h-full")}
           style={{ width: `${zoomPct}%` }}
         >
-          {field.previewImage ? (
+          {field.previewImage && previewKind === "image" ? (
             <img src={field.previewImage} alt="" className="block w-full" aria-hidden="true" />
+          ) : field.previewImage && previewKind === "pdf" ? (
+            <iframe
+              src={field.previewImage}
+              title={`Uploaded document page ${field.sourcePage}`}
+              className="h-[760px] w-full border-0"
+            />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
               <p className="rounded-md border border-amber-600/40 bg-amber-50 p-3 text-sm font-medium text-amber-950">
@@ -70,7 +77,7 @@ export function DocPreview({ field }: { field: ExtractedField }) {
               </p>
             </div>
           )}
-          {field.previewImage && (
+          {field.previewImage && previewKind === "image" && (
             <div
               className={`absolute rounded-[3px] border-2 ${highlightClass}`}
               style={{
@@ -93,14 +100,26 @@ export function DocPreview({ field }: { field: ExtractedField }) {
               : "bg-background text-muted-foreground")
           }
         >
-          {isUntrusted ? "Suspicious instruction found here" : `${field.label} found here`}:{" "}
+          {previewKind === "pdf"
+            ? "Real PDF preview shown. Highlight boxes require the server page-image extractor."
+            : isUntrusted
+              ? "Suspicious instruction found here"
+              : `${field.label} found here`}
+          {previewKind === "image" ? ": " : " "}
           <span className={isUntrusted ? "font-semibold text-amber-950" : "text-foreground"}>
-            {field.value}
+            {previewKind === "image" ? field.value : ""}
           </span>
         </figcaption>
       )}
     </figure>
   );
+}
+
+function previewSourceKind(src: string | undefined): "image" | "pdf" | "unknown" {
+  if (!src) return "unknown";
+  if (src.startsWith("data:image/")) return "image";
+  if (src.startsWith("data:application/pdf") || src.startsWith("blob:")) return "pdf";
+  return "unknown";
 }
 
 function visibleBox(bbox: ExtractedField["bbox"]) {

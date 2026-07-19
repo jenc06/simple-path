@@ -70,8 +70,7 @@ export interface ScanResult {
 
 export async function scanDocument(file: File, selectedDocType: DocType): Promise<ScanResult> {
   if (typeof window !== "undefined") {
-    const serverResult = await scanViaServer(file, selectedDocType);
-    if (serverResult) return serverResult;
+    return scanViaServer(file, selectedDocType);
   }
 
   const detectedDocType = detectDocumentType(file, selectedDocType);
@@ -104,13 +103,12 @@ export async function extractDocumentFields({
   scan: ScanResult;
 }): Promise<ExtractionResult> {
   if (typeof window !== "undefined") {
-    const serverResult = await extractViaServer({
+    return extractViaServer({
       finalDocType,
       docId,
       file,
       scan,
     });
-    if (serverResult) return serverResult;
   }
 
   const fields = validateExtractedFields(finalDocType, mockFieldsFor(finalDocType, docId));
@@ -128,7 +126,7 @@ export async function extractDocumentFields({
   };
 }
 
-async function scanViaServer(file: File, selectedDocType: DocType): Promise<ScanResult | null> {
+async function scanViaServer(file: File, selectedDocType: DocType): Promise<ScanResult> {
   const form = new FormData();
   form.append("file", file);
   form.append("selectedDocType", selectedDocType);
@@ -136,7 +134,9 @@ async function scanViaServer(file: File, selectedDocType: DocType): Promise<Scan
     method: "POST",
     body: form,
   });
-  if (!response.ok) return null;
+  if (!response.ok) {
+    throw new Error(await extractionErrorMessage(response, "Document scanner is unavailable."));
+  }
   return (await response.json()) as ScanResult;
 }
 
@@ -145,7 +145,7 @@ async function extractViaServer(args: {
   docId: string;
   file: File;
   scan: ScanResult;
-}): Promise<ExtractionResult | null> {
+}): Promise<ExtractionResult> {
   const form = new FormData();
   form.append("file", args.file);
   form.append("finalDocType", args.finalDocType);
@@ -155,7 +155,9 @@ async function extractViaServer(args: {
     method: "POST",
     body: form,
   });
-  if (!response.ok) return null;
+  if (!response.ok) {
+    throw new Error(await extractionErrorMessage(response, "Document extractor is unavailable."));
+  }
   const result = (await response.json()) as ExtractionResult;
   return {
     ...result,
@@ -164,6 +166,16 @@ async function extractViaServer(args: {
     previewPages: normalizePreviewPages(result.previewPages),
     warnings: Array.isArray(result.warnings) ? result.warnings.map(String) : [],
   };
+}
+
+async function extractionErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload = (await response.json()) as { error?: unknown; detail?: unknown };
+    const message = payload.error ?? payload.detail;
+    return typeof message === "string" && message.trim() ? message : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizePreviewPages(

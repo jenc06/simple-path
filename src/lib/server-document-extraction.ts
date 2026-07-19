@@ -15,11 +15,20 @@ const BUNDLED_PYTHON =
 const PYTHON_BIN =
   process.env.RENTSMOOTH_PYTHON_BIN ?? (existsSync(BUNDLED_PYTHON) ? BUNDLED_PYTHON : "python3");
 const EXTRACTOR = path.resolve(process.cwd(), "scripts/document_extractor.py");
+const EXTRACTOR_SERVICE_URL = process.env.EXTRACTOR_SERVICE_URL?.replace(/\/+$/, "");
 
 export async function scanUploadedDocument(
   file: File,
   selectedDocType: DocType,
 ): Promise<ScanResult> {
+  if (EXTRACTOR_SERVICE_URL) {
+    const payload = await callExtractorService("/scan", [
+      ["file", file],
+      ["selectedDocType", selectedDocType],
+    ]);
+    return payload as ScanResult;
+  }
+
   return withTempUpload(file, async (filePath) => {
     const payload = await runExtractor(["scan", "--file", filePath, "--selected", selectedDocType]);
     return payload as ScanResult;
@@ -37,6 +46,16 @@ export async function extractUploadedDocument({
   docId: string;
   scan: ScanResult;
 }): Promise<ExtractionResult> {
+  if (EXTRACTOR_SERVICE_URL) {
+    const payload = await callExtractorService("/extract", [
+      ["file", file],
+      ["finalDocType", finalDocType],
+      ["docId", docId],
+      ["scanJson", JSON.stringify(scan)],
+    ]);
+    return payload as ExtractionResult;
+  }
+
   return withTempUpload(file, async (filePath) => {
     const payload = await runExtractor([
       "extract",
@@ -78,6 +97,39 @@ function extensionFor(file: File): string {
   if (file.type === "image/png") return ".png";
   if (file.type === "image/jpeg") return ".jpg";
   return ".bin";
+}
+
+async function callExtractorService(pathname: string, entries: Array<[string, string | File]>) {
+  const form = new FormData();
+  for (const [key, value] of entries) {
+    form.append(key, value);
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000);
+  try {
+    const response = await fetch(`${EXTRACTOR_SERVICE_URL}${pathname}`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let payload: unknown;
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      payload = { error: text };
+    }
+    if (!response.ok) {
+      const detail =
+        payload && typeof payload === "object" && "detail" in payload
+          ? String((payload as { detail: unknown }).detail)
+          : text;
+      throw new Error(`Extractor service failed: ${detail || response.statusText}`);
+    }
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function runExtractor(args: string[]): Promise<unknown> {

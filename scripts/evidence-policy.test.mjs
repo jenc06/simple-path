@@ -7,6 +7,11 @@ const sourcePath = resolve("src/lib/reference-evidence.server.ts");
 const source = readFileSync(sourcePath, "utf8");
 const packetSource = readFileSync(resolve("src/routes/packet.tsx"), "utf8");
 const docPreviewSource = readFileSync(resolve("src/components/doc-preview.tsx"), "utf8");
+const serverExtractionSource = readFileSync(
+  resolve("src/lib/server-document-extraction.ts"),
+  "utf8",
+);
+const extractionBackendSource = readFileSync(resolve("src/lib/extraction-backend.ts"), "utf8");
 
 test("Tavily integration is extract-only and HUD allowlisted", () => {
   assert.match(source, /api\.tavily\.com\/extract/);
@@ -109,4 +114,14 @@ test("document source boxes use a clear amber highlight", () => {
   assert.doesNotMatch(docPreviewSource, /border-sky-600/);
   assert.doesNotMatch(docPreviewSource, /bg-sky-300/);
   assert.match(docPreviewSource, /Suspicious instruction found here/);
+});
+
+test("Vercel extraction forwards to a hosted OCR service without silent mock fallback", () => {
+  assert.match(serverExtractionSource, /process\.env\.EXTRACTOR_SERVICE_URL/);
+  assert.match(serverExtractionSource, /callExtractorService\("\/scan"/);
+  assert.match(serverExtractionSource, /callExtractorService\("\/extract"/);
+  assert.match(serverExtractionSource, /runExtractor\(\["scan"/);
+  assert.match(serverExtractionSource, /runExtractor\(\[\s*"extract"/);
+  assert.match(extractionBackendSource, /throw new Error\(await extractionErrorMessage/);
+  assert.doesNotMatch(extractionBackendSource, /if \(!response\.ok\) return null/);
 });

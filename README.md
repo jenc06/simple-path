@@ -152,12 +152,15 @@ Optional environment variables:
 ```bash
 OPENAI_API_KEY=...
 TAVILY_API_KEY=...
+EXTRACTOR_SERVICE_URL=https://your-extractor-service.onrender.com
 RENTSMOOTH_PYTHON_BIN=/path/to/python3
 ```
 
 Do not commit API keys to GitHub. For local testing, put them in your local environment or an uncommitted `.env` file. For deployment, add them as private environment variables/secrets in the hosting provider.
 
 If live HUD retrieval is unavailable, the app uses a frozen local HUD reference and labels it as fallback evidence.
+
+For Vercel PDF extraction, deploy the Docker service in `extractor-service/` to Render or Railway, then set `EXTRACTOR_SERVICE_URL` in Vercel. Local development can still use the direct Python extractor.
 
 ## License and Data
 

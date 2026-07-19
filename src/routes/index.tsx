@@ -1,85 +1,185 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Info, ShieldCheck } from "lucide-react";
+import { ArrowRight, Info, Lock, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: Home,
 });
 
+const STEPS = [
+  {
+    n: "01",
+    title: "Upload your documents",
+    body: "Add your application form and at least one income document — pay stubs, benefit letters, tax returns. You can attach several files per document.",
+  },
+  {
+    n: "02",
+    title: "Review each value",
+    body: "Basic values (name, household) and calculation values (hours, pay) — one card at a time. The document highlights where every value was found so you can confirm or correct it.",
+  },
+  {
+    n: "03",
+    title: "See the calculation",
+    body: "A plain, factual comparison of the annualized income to the referenced threshold. No approval, denial, or score is ever produced.",
+  },
+  {
+    n: "04",
+    title: "Download your packet",
+    body: "Preview and download a printable PDF for your caseworker or landlord. When you are done, delete the session with one button.",
+  },
+];
+
 function Home() {
   const [infoOpen, setInfoOpen] = useState(false);
   return (
-    <div className="min-h-dvh bg-background text-foreground flex flex-col">
+    <div className="min-h-dvh bg-background text-foreground">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+      >
+        Skip to main content
+      </a>
+
       <main
         id="main"
-        className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center px-6 py-10 text-center"
+        className="mx-auto w-full max-w-6xl px-6 py-16 md:px-12 md:py-24"
       >
-        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
-          <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Private. Session only. Never used to train AI.</span>
-        </div>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-          SimplePath
-        </h1>
-        <p className="mt-3 text-base text-muted-foreground">
-          A calm, step-by-step review of the income documents you upload. You confirm every
-          value — this tool never approves, denies, or scores anything.
-        </p>
-
-        <Link
-          to="/upload"
-          className="mt-8 inline-flex h-14 w-full items-center justify-center rounded-xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          aria-label="Start income review"
-        >
-          Start
-        </Link>
-
-        <ol className="mt-8 w-full space-y-4 text-left text-sm">
-          <li>
-            <p className="font-semibold text-foreground">1. Upload your documents</p>
-            <p className="text-muted-foreground">
-              Add your application form and at least one income document (pay stubs, benefit
-              letters, tax returns). You can add several files per document.
-            </p>
-          </li>
-          <li>
-            <p className="font-semibold text-foreground">2. Review each value</p>
-            <p className="text-muted-foreground">
-              Go through basic values (name, household) and calculation values (hours, pay) one
-              card at a time. The document highlights where each value was found so you can
-              confirm or correct it.
-            </p>
-          </li>
-          <li>
-            <p className="font-semibold text-foreground">3. See the calculation</p>
-            <p className="text-muted-foreground">
-              We show the annualized income and a plain factual comparison to the referenced
-              threshold — no approval, denial, or score.
-            </p>
-          </li>
-          <li>
-            <p className="font-semibold text-foreground">4. Download your packet</p>
-            <p className="text-muted-foreground">
-              Preview and download a printable PDF for your caseworker or landlord. When you're
-              done, delete the session with one button.
-            </p>
-          </li>
-        </ol>
-      </main>
-
-      <div className="pb-8">
-        <div className="mx-auto flex max-w-lg justify-center px-6">
-          <button
-            type="button"
-            onClick={() => setInfoOpen(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-full border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label="Learn how this works and what data we use"
+        <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-24 items-start">
+          {/* Left rail — identity + context (sticky on desktop) */}
+          <section
+            aria-labelledby="brand-heading"
+            className="flex flex-col space-y-12 lg:sticky lg:top-16"
           >
-            <Info className="h-4 w-4" aria-hidden="true" />
-            <span>How this works</span>
-          </button>
+            <div className="space-y-4">
+              <span className="inline-block border-b border-border pb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                System / 01 · Income review
+              </span>
+              <h1
+                id="brand-heading"
+                className="font-display text-5xl font-semibold leading-[1.05] tracking-tight md:text-6xl"
+              >
+                SimplePath
+              </h1>
+            </div>
+
+            <div className="space-y-6 max-w-md">
+              <p className="text-lg leading-relaxed text-[color:var(--muted-foreground)]">
+                A private, non-decisioning walkthrough for reviewing the income documents
+                you upload. You confirm every value. This tool never approves, denies,
+                or scores anything.
+              </p>
+
+              <p
+                className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+                aria-label="Session is private, stored only on this device, never used to train AI"
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 rounded-full bg-[color:var(--ring)]"
+                />
+                <Lock className="h-3 w-3" aria-hidden="true" />
+                <span>Private session · never used to train AI</span>
+              </p>
+            </div>
+
+            <div className="hidden lg:block">
+              <button
+                type="button"
+                onClick={() => setInfoOpen(true)}
+                className="inline-flex items-center gap-2 border-b border-border pb-1 text-sm font-medium text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Info className="h-4 w-4" aria-hidden="true" />
+                <span>How this works</span>
+              </button>
+            </div>
+          </section>
+
+          {/* Right column — timeline + CTA */}
+          <section aria-labelledby="steps-heading" className="relative">
+            <h2 id="steps-heading" className="sr-only">
+              The four steps
+            </h2>
+            <ol className="border-l border-border pl-8 space-y-14 md:pl-12">
+              {STEPS.map((step, i) => (
+                <li key={step.n} className="relative">
+                  <span
+                    aria-hidden="true"
+                    className={
+                      "absolute -left-[41px] md:-left-[57px] top-0 w-6 bg-background py-1 text-center font-mono text-[11px] font-bold " +
+                      (i === 0 ? "text-[color:var(--ring)]" : "text-muted-foreground")
+                    }
+                  >
+                    {step.n}
+                  </span>
+                  <div className="space-y-2">
+                    <h3 className="font-display text-xl font-medium tracking-tight">
+                      <span className="sr-only">Step {step.n}. </span>
+                      {step.title}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {step.body}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <div className="mt-14 pl-8 md:pl-12">
+              <Link
+                to="/upload"
+                className="group inline-flex items-center gap-8 bg-primary px-8 py-5 text-primary-foreground transition-colors hover:bg-[color:var(--foreground)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                aria-label="Start income review"
+              >
+                <span className="text-sm font-semibold uppercase tracking-[0.2em]">
+                  Start verification
+                </span>
+                <ArrowRight
+                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                  aria-hidden="true"
+                />
+              </Link>
+              <p className="mt-6 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Avg. completion time · 4–6 minutes
+              </p>
+            </div>
+
+            <div className="mt-16 pl-8 md:pl-12 lg:hidden">
+              <button
+                type="button"
+                onClick={() => setInfoOpen(true)}
+                className="inline-flex items-center gap-2 border-b border-border pb-1 text-sm font-medium text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Info className="h-4 w-4" aria-hidden="true" />
+                <span>How this works</span>
+              </button>
+            </div>
+          </section>
         </div>
-      </div>
+
+        <div className="mt-24 grid grid-cols-1 gap-6 border-t border-border pt-8 text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:grid-cols-3">
+          <div>
+            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">
+              Privacy
+            </div>
+            <div className="font-medium text-foreground">
+              <ShieldCheck className="mr-1 inline h-3 w-3" aria-hidden="true" />
+              Non-decisioning
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">
+              Storage
+            </div>
+            <div className="font-medium text-foreground">Local session only</div>
+          </div>
+          <div>
+            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">
+              Accessibility
+            </div>
+            <div className="font-medium text-foreground">WCAG 2.2 AA</div>
+          </div>
+        </div>
+      </main>
 
       {infoOpen && (
         <div
@@ -88,30 +188,32 @@ function Home() {
           aria-labelledby="info-title"
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
         >
-          <div className="w-full max-w-md rounded-t-2xl bg-background p-5 shadow-xl sm:rounded-2xl">
-            <h2 id="info-title" className="text-lg font-semibold">
+          <div className="w-full max-w-md bg-background p-6 shadow-xl sm:border sm:border-border">
+            <h2 id="info-title" className="font-display text-xl font-semibold tracking-tight">
               How this works
             </h2>
-            <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+            <div className="mt-4 space-y-3 text-sm text-muted-foreground">
               <p>
-                <strong className="text-foreground">We do not decide anything.</strong> We
-                extract values from your documents so you can confirm them. Approval or
-                denial is based only on the published rule and the numbers you confirm.
+                <strong className="text-foreground">We do not decide anything.</strong>{" "}
+                Values are extracted so you can confirm them. Approval or denial rests only on
+                the published rule and the numbers you confirm.
               </p>
               <p>
-                <strong className="text-foreground">We do not infer protected traits.</strong>{" "}
+                <strong className="text-foreground">
+                  We do not infer protected traits.
+                </strong>{" "}
                 No demographic, behavioral, or landlord-revenue features are used.
               </p>
               <p>
-                <strong className="text-foreground">Your data stays yours.</strong> Processing
-                is ephemeral, local persisted data is stored only for this browser session,
+                <strong className="text-foreground">Your data stays yours.</strong>{" "}
+                Processing is ephemeral, local persistence is scoped to this browser session,
                 documents are never used to train AI, and you can delete this session at any time.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setInfoOpen(false)}
-              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="mt-6 inline-flex h-11 w-full items-center justify-center bg-primary px-4 text-sm font-semibold uppercase tracking-[0.16em] text-primary-foreground hover:bg-[color:var(--foreground)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Got it, close
             </button>

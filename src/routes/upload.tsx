@@ -178,22 +178,6 @@ function UploadPage() {
     setPhase("income-choose");
   }
 
-  function skipAllIncome() {
-    // Mark each income type not yet added as skipped placeholder (only if none uploaded).
-    setSession((s) => {
-      const existing = new Set(s.docs.map((d) => d.type));
-      const additions = INCOME_TYPES.filter((t) => !existing.has(t)).map((t) => ({
-        id: `${t}-skip`,
-        type: t,
-        fileName: "—" as const,
-        status: "skipped" as const,
-        fields: [],
-      }));
-      return { ...s, docs: [...s.docs, ...additions] };
-    });
-    setAnnouncement("Marked no income documents available.");
-  }
-
   function deleteDoc(id: string) {
     const doc = session.docs.find((d) => d.id === id);
     setSession((s) => ({
@@ -207,7 +191,7 @@ function UploadPage() {
     }
   }
 
-  const canFinish = hasApplication || hasAnyIncome || session.docs.length > 0;
+  const canFinish = hasAnyIncome;
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
 
   const stepLabel =

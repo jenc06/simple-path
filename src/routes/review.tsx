@@ -275,9 +275,19 @@ function ReviewPage() {
             or confirm these items.
           </p>
           <div className="space-y-3">
-            {untrusted.map((f) => (
-              <UntrustedCard key={f.id} field={f} isActive={false} onActivate={() => {}} />
-            ))}
+            {untrusted.map((f) => {
+              const uKey = `untrusted::${f.id}`;
+              const isActive = activeKey === uKey;
+              return (
+                <div key={f.id} ref={isActive ? activeCardRef : undefined}>
+                  <UntrustedCard
+                    field={f}
+                    isActive={isActive}
+                    onActivate={() => setActiveKey(uKey)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

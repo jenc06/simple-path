@@ -623,6 +623,7 @@ function UploadPage() {
               type="button"
               onClick={openFilePicker}
               disabled={isExtracting}
+              title={isExtracting ? "Not allowed — a document is currently being read. Please wait." : undefined}
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               aria-describedby={isExtracting ? "income-upload-not-allowed" : undefined}
             >

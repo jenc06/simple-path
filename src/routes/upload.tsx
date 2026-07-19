@@ -305,16 +305,18 @@ function UploadPage() {
                     )}
                     {d.status === "skipped" && "Not provided"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => deleteDoc(d.id)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    aria-label={`Remove ${DOC_LABELS[d.type]}`}
-                    title={`Remove ${DOC_LABELS[d.type]}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    <span className="sr-only">Remove</span>
-                  </button>
+                  {d.status !== "skipped" && (
+                    <button
+                      type="button"
+                      onClick={() => deleteDoc(d.id)}
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input px-2 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label={`Delete ${DOC_LABELS[d.type]}`}
+                      title={`Delete ${DOC_LABELS[d.type]}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Delete
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

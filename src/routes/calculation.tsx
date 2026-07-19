@@ -29,10 +29,14 @@ function CalculationPage() {
   const [announcement, setAnnouncement] = useState("");
 
 
+  const payField = useMemo(
+    () => allFields(session).find((f) => f.label.toLowerCase().includes("pay before")),
+    [session],
+  );
+
   const result = useMemo(() => {
-    const fields = allFields(session);
-    const payField = fields.find((f) => f.label.toLowerCase().includes("pay before"));
     const raw = payField ? (payField.corrected ?? payField.value) : "";
+
     const amount = parseAmount(raw);
     const mult = frequencyMultiplier(session.frequency);
 

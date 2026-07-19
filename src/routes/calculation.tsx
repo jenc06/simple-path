@@ -2,15 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Check } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
-import { EditableValue } from "@/components/editable-value";
 
-import {
-  THRESHOLD,
-  allFields,
-  frequencyMultiplier,
-  parseAmount,
-  useSession,
-} from "@/lib/session-store";
+import { THRESHOLD, computeAnnualIncome, useSession } from "@/lib/session-store";
 
 export const Route = createFileRoute("/calculation")({
   head: () => ({
@@ -28,48 +21,17 @@ function CalculationPage() {
   const navigate = useNavigate();
   const [announcement, setAnnouncement] = useState("");
 
+  const result = useMemo(() => computeAnnualIncome(session), [session]);
 
-  const payField = useMemo(
-    () => allFields(session).find((f) => f.label.toLowerCase().includes("pay before")),
-    [session],
-  );
-
-  const result = useMemo(() => {
-    const raw = payField ? (payField.corrected ?? payField.value) : "";
-
-    const amount = parseAmount(raw);
-    const mult = frequencyMultiplier(session.frequency);
-
-    const errors: string[] = [];
-    if (!payField || Number.isNaN(amount)) errors.push("No confirmed income amount was found.");
-    if (mult === null) errors.push("Pay frequency is unknown. Please go back and set it.");
-    if (!Number.isNaN(amount) && amount < 0) errors.push("Income amount cannot be negative.");
-    if (THRESHOLD.amount < 0) errors.push("Threshold cannot be negative.");
-
-    const annual = mult && !Number.isNaN(amount) ? amount * mult : NaN;
-    const belowOrEqual = !Number.isNaN(annual) && annual <= THRESHOLD.amount;
-
-    return { amount, mult, annual, belowOrEqual, errors, raw };
-  }, [session]);
-
-  const freqLabel: Record<string, string> = {
-    weekly: "every week",
-    biweekly: "every 2 weeks",
-    semimonthly: "twice a month",
-    monthly: "monthly",
-    unknown: "unknown",
-  };
+  const belowOrEqual = result.annual <= THRESHOLD.amount;
+  const hasBlockingError = result.errors.length > 0 && result.contributions.length === 0;
 
   return (
     <PageShell title="Calculation" step="Annualize and compare">
       <LiveRegion message={announcement} />
 
-
-      {result.errors.length > 0 ? (
-        <div
-          role="alert"
-          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4"
-        >
+      {hasBlockingError ? (
+        <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
           <div className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" aria-hidden="true" />
             <h2 className="text-base font-semibold">We can't finish the calculation</h2>
@@ -81,7 +43,10 @@ function CalculationPage() {
           </ul>
           <button
             type="button"
-            onClick={() => navigate({ to: "/review" })}
+            onClick={() => {
+              setAnnouncement("Going back to review values.");
+              navigate({ to: "/review" });
+            }}
             className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Go back and fix this
@@ -89,53 +54,39 @@ function CalculationPage() {
         </div>
       ) : (
         <>
-          <section
-            aria-labelledby="calc"
-            className="rounded-2xl border bg-card p-5 shadow-sm"
-          >
+          <section aria-labelledby="calc" className="rounded-2xl border bg-card p-5 shadow-sm">
             <h2 id="calc" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Your annualized income
             </h2>
             <p className="mt-1 text-4xl font-bold tracking-tight">{currency(result.annual)}</p>
 
-            <dl className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <dt className="text-muted-foreground">Confirmed income</dt>
-                <dd className="mt-1">
-                  {payField ? (
-                    <EditableValue
-                      field={payField}
-                      size="md"
-                      ariaLabel="Pay before taxes"
-                      onSaved={(v) =>
-                        setAnnouncement(
-                          `Pay before taxes updated to ${v}. Annualized income recalculated.`,
-                        )
-                      }
-                    />
-                  ) : (
-                    <span className="font-semibold">{currency(result.amount)}</span>
-                  )}
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-muted-foreground">Frequency</dt>
-                <dd className="font-semibold">{freqLabel[session.frequency]}</dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="text-muted-foreground">Formula</dt>
-                <dd className="font-mono text-sm">
-                  {currency(result.amount)} × {result.mult} = {currency(result.annual)}
-                </dd>
+            <dl className="mt-5 space-y-3 text-sm">
+              {result.contributions.map((c, i) => (
+                <div key={i} className="rounded-md border bg-background p-3">
+                  <dt className="text-muted-foreground">{c.label}</dt>
+                  <dd className="mt-1 font-mono text-sm">{c.formula}</dd>
+                  <dd className="mt-0.5 text-sm font-semibold">= {currency(c.amount)} / year</dd>
+                </div>
+              ))}
+              <div className="border-t pt-3">
+                <dt className="text-muted-foreground">Total annualized</dt>
+                <dd className="text-lg font-bold">{currency(result.annual)}</dd>
               </div>
             </dl>
+
+            {result.errors.length > 0 && (
+              <div role="alert" className="mt-4 rounded-md border border-amber-500/60 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Some sources could not be included:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {result.errors.map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
 
-          <section
-            aria-labelledby="cmp"
-            className="mt-4 rounded-2xl border bg-card p-5 shadow-sm"
-          >
+          <section aria-labelledby="cmp" className="mt-4 rounded-2xl border bg-card p-5 shadow-sm">
             <h2 id="cmp" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Comparison to threshold
             </h2>
@@ -147,24 +98,20 @@ function CalculationPage() {
             <p
               className={
                 "mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold " +
-                (result.belowOrEqual
+                (belowOrEqual
                   ? "border border-emerald-700/40 bg-emerald-50 text-emerald-900"
                   : "border border-amber-700/40 bg-amber-50 text-amber-900")
               }
             >
               <Check className="h-4 w-4" aria-hidden="true" />
-              Result: your income is{" "}
-              {result.belowOrEqual ? "below or equal to" : "above"} the threshold.
+              Result: your income is {belowOrEqual ? "below or equal to" : "above"} the threshold.
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
               This is a factual comparison. It is not an approval, denial, or score.
             </p>
           </section>
 
-          <section
-            aria-labelledby="src"
-            className="mt-4 rounded-2xl border bg-card p-5 shadow-sm"
-          >
+          <section aria-labelledby="src" className="mt-4 rounded-2xl border bg-card p-5 shadow-sm">
             <h2 id="src" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Rule source
             </h2>

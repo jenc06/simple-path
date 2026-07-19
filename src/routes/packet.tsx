@@ -739,48 +739,51 @@ function PacketPage() {
         )}
       </Section>
 
-      {preview && (
+      {preview && previewUrl && (
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="preview-title"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex flex-col bg-black/60 p-0 sm:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPreview(false);
+              setPreviewUrl(null);
+            }
+          }}
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-background p-5 shadow-xl sm:rounded-2xl">
-            <div className="flex items-center justify-between">
-              <h2 id="preview-title" className="text-lg font-semibold">
+          <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden bg-background shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3">
+              <h2 id="preview-title" className="font-serif text-lg font-semibold">
                 Packet preview
               </h2>
-              <button
-                type="button"
-                onClick={() => setPreview(false)}
-                aria-label="Close preview"
-                className="inline-flex h-10 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={downloadPdf}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreview(false);
+                    setPreviewUrl(null);
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  Close preview
+                </button>
+              </div>
             </div>
-            <div className="mt-3 space-y-3 text-sm">
-              <p>
-                <strong>Annualized income:</strong>{" "}
-                {Number.isNaN(annual) ? "—" : currency(annual)}
-              </p>
-              <p>
-                <strong>Threshold:</strong> {currency(THRESHOLD.amount)} ({THRESHOLD.label})
-              </p>
-              <p>
-                <strong>Comparison:</strong>{" "}
-                {Number.isNaN(annual)
-                  ? "unavailable"
-                  : belowOrEqual
-                    ? "below or equal"
-                    : "above"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Full details are in the sections on this page.
-              </p>
-            </div>
+            <iframe
+              title="Packet PDF preview"
+              src={previewUrl}
+              className="h-full w-full flex-1 bg-muted"
+            />
           </div>
         </div>
       )}

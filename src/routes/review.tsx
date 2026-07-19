@@ -301,7 +301,3 @@ function mkKey(m: MergedField) {
   return `${m.category}::${m.key}`;
 }
 
-function sortByConfirmation(list: MergedField[]): MergedField[] {
-  // unconfirmed first (stable), then confirmed
-  return [...list].sort((a, b) => Number(a.confirmed) - Number(b.confirmed));
-}

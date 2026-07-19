@@ -135,7 +135,6 @@ export function EditableValue({ field, size = "md", onSaved, ariaLabel }: Props)
     <div className="w-full">
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className={sizeClass[size]}
           tabIndex={0}
           role="button"
           aria-label={`${ariaLabel ?? field.label}: ${current}. Press Enter to edit.`}
@@ -150,6 +149,7 @@ export function EditableValue({ field, size = "md", onSaved, ariaLabel }: Props)
         >
           {current}
         </span>
+
         <button
           type="button"
           onClick={startEdit}

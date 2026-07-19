@@ -10,8 +10,7 @@ import {
   THRESHOLD,
   TODAY,
   allFields,
-  frequencyMultiplier,
-  parseAmount,
+  computeAnnualIncome,
   useSession,
   type DocType,
 } from "@/lib/session-store";
@@ -43,10 +42,8 @@ function PacketPage() {
   const [announcement, setAnnouncement] = useState("");
 
   const fields = useMemo(() => allFields(session), [session]);
-  const payField = fields.find((f) => f.label.toLowerCase().includes("pay before"));
-  const amount = payField ? parseAmount(payField.corrected ?? payField.value) : NaN;
-  const mult = frequencyMultiplier(session.frequency);
-  const annual = mult && !Number.isNaN(amount) ? amount * mult : NaN;
+  const income = useMemo(() => computeAnnualIncome(session), [session]);
+  const annual = income.contributions.length > 0 ? income.annual : NaN;
   const belowOrEqual = !Number.isNaN(annual) && annual <= THRESHOLD.amount;
 
   const checklist = CHECKLIST.map((t) => {
@@ -82,8 +79,11 @@ function PacketPage() {
       url: THRESHOLD.url,
     },
     calculation: {
-      confirmedIncome: Number.isNaN(amount) ? null : amount,
-      multiplier: mult,
+      contributions: income.contributions.map((c) => ({
+        label: c.label,
+        formula: c.formula,
+        amount: c.amount,
+      })),
       annualizedIncome: Number.isNaN(annual) ? null : annual,
       comparison: Number.isNaN(annual)
         ? "unavailable"
@@ -230,7 +230,9 @@ function PacketPage() {
         bold: true,
       });
     } else {
-      kv("Formula", `${currency(amount)} × ${mult} = ${currency(annual)}`);
+      income.contributions.forEach((c) => {
+        line(`• ${c.label}: ${c.formula} = ${currency(c.amount)} / year`);
+      });
       kv("Annualized income", currency(annual));
       kv("Threshold", currency(THRESHOLD.amount));
       kv(
@@ -375,7 +377,9 @@ function PacketPage() {
           </p>
         ) : (
           <dl className="space-y-1.5 text-sm">
-            <Row k="Formula" v={`${currency(amount)} × ${mult} = ${currency(annual)}`} />
+            {income.contributions.map((c, i) => (
+              <Row key={i} k={c.label} v={`${c.formula} = ${currency(c.amount)} / year`} />
+            ))}
             <Row k="Annualized income" v={currency(annual)} />
             <Row k="Threshold" v={currency(THRESHOLD.amount)} />
             <Row

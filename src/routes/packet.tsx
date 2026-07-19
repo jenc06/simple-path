@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";

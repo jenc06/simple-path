@@ -3,7 +3,9 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import { DocPreview } from "@/components/doc-preview";
+import { EditableValue } from "@/components/editable-value";
 import { DOC_LABELS, allFields, useSession } from "@/lib/session-store";
+
 
 export const Route = createFileRoute("/confirm")({
   head: () => ({

@@ -80,7 +80,13 @@ function loadPersisted(): SessionState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SessionState;
     if (!parsed || !Array.isArray(parsed.docs)) return null;
-    return parsed;
+    // Drop any persisted pay_stub / benefit_letter docs so "Added so far" starts clean.
+    return {
+      ...parsed,
+      docs: parsed.docs.filter(
+        (d) => d.type !== "pay_stub" && d.type !== "benefit_letter",
+      ),
+    };
   } catch {
     return null;
   }

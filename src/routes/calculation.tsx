@@ -60,8 +60,10 @@ function CalculationPage() {
     unknown: "unknown",
   };
 
+  return (
     <PageShell title="Calculation" step="Annualize and compare">
       <LiveRegion message={announcement} />
+
 
       {result.errors.length > 0 ? (
         <div

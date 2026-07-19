@@ -542,6 +542,7 @@ function CanonicalIncomeSourceEditor({
       }
     }
     setError("");
+    setSavedAt(null);
     setDraft(next);
   }
 

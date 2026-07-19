@@ -39,6 +39,7 @@ function PacketPage() {
   const { session, setSession } = useSession();
   const [showJson, setShowJson] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
   const fields = useMemo(() => allFields(session), [session]);
@@ -108,172 +109,432 @@ function PacketPage() {
     setAnnouncement("JSON packet downloaded to your device.");
   }
 
-  function downloadPdf() {
+  function applicantName(): string {
+    const f = fields.find((x) => /name/i.test(x.label));
+    return f ? (f.corrected ?? f.value) : "—";
+  }
+  function applicantAddress(): string {
+    const f = fields.find((x) => /address/i.test(x.label));
+    return f ? (f.corrected ?? f.value) : "—";
+  }
+
+  function buildPdf(): jsPDF {
     const doc = new jsPDF({ unit: "pt", format: "letter" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 48;
-    const maxWidth = pageWidth - margin * 2;
-    let y = margin;
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const M = 54;
+    const contentW = pageW - M * 2;
+    const NAVY: [number, number, number] = [24, 33, 61];
+    const INK: [number, number, number] = [30, 30, 34];
+    const MUTED: [number, number, number] = [110, 116, 128];
+    const RULE: [number, number, number] = [205, 210, 220];
+    const BAND: [number, number, number] = [244, 240, 232]; // parchment
+    const OK: [number, number, number] = [30, 95, 60];
+    const WARN: [number, number, number] = [155, 90, 20];
+    const BAD: [number, number, number] = [160, 40, 40];
 
-    const ensureSpace = (needed: number) => {
-      if (y + needed > pageHeight - margin) {
-        doc.addPage();
-        y = margin;
-      }
-    };
+    let y = 0;
 
-    const heading = (text: string) => {
-      ensureSpace(28);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(20);
-      doc.text(text, margin, y);
-      y += 18;
-    };
+    const setFill = (c: [number, number, number]) => doc.setFillColor(c[0], c[1], c[2]);
+    const setText = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
+    const setDraw = (c: [number, number, number]) => doc.setDrawColor(c[0], c[1], c[2]);
 
-    const line = (text: string, opts?: { bold?: boolean; muted?: boolean }) => {
-      doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
-      doc.setFontSize(11);
-      doc.setTextColor(opts?.muted ? 110 : 40);
-      const wrapped = doc.splitTextToSize(text, maxWidth);
-      for (const w of wrapped) {
-        ensureSpace(15);
-        doc.text(w, margin, y);
-        y += 14;
-      }
-    };
+    const genLabel = `Generated ${new Date().toLocaleString("en-US", {
+      dateStyle: "long",
+      timeStyle: "short",
+    })}`;
+    const packetId = `RS-${new Date().getTime().toString(36).toUpperCase()}`;
 
-    const kv = (k: string, v: string) => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      const label = `${k}: `;
-      const labelWidth = doc.getTextWidth(label);
-      const valueLines = doc.splitTextToSize(v, maxWidth - labelWidth);
-      ensureSpace(15);
-      doc.setTextColor(110);
-      doc.text(label, margin, y);
-      doc.setTextColor(20);
-      doc.text(valueLines[0], margin + labelWidth, y);
-      y += 14;
-      for (let i = 1; i < valueLines.length; i++) {
-        ensureSpace(15);
-        doc.text(valueLines[i], margin + labelWidth, y);
-        y += 14;
-      }
-    };
+    // ---------- masthead (page 1 only) ----------
+    setFill(NAVY);
+    doc.rect(0, 0, pageW, 92, "F");
+    setText([255, 255, 255]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("RENTSMOOTH", M, 36);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Renter Income Packet", M, 50);
+    doc.setFontSize(9);
+    doc.text(genLabel, pageW - M, 36, { align: "right" });
+    doc.text(`Packet ID: ${packetId}`, pageW - M, 50, { align: "right" });
 
-    const divider = () => {
-      ensureSpace(14);
-      doc.setDrawColor(220);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 12;
-    };
-
-    // Title
+    // title bar
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
-    doc.setTextColor(20);
-    doc.text("RentSmooth packet", margin, y);
-    y += 22;
+    doc.text("Income Packet", M, 82);
+    y = 120;
+
+    // ---------- helpers that page-break ----------
+    const footerH = 40;
+
+    const addFooter = (pageNum: number) => {
+      setDraw(RULE);
+      doc.setLineWidth(0.5);
+      doc.line(M, pageH - footerH, pageW - M, pageH - footerH);
+      setText(MUTED);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(
+        "RentSmooth organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
+        M,
+        pageH - footerH + 14,
+        { maxWidth: contentW - 90 },
+      );
+      doc.text(`Page ${pageNum}`, pageW - M, pageH - footerH + 14, { align: "right" });
+      doc.text(packetId, pageW - M, pageH - footerH + 26, { align: "right" });
+    };
+
+    const ensure = (need: number) => {
+      if (y + need > pageH - footerH - 8) {
+        doc.addPage();
+        y = M;
+      }
+    };
+
+    // ---------- primitives ----------
+    const sectionHeader = (label: string) => {
+      ensure(34);
+      setText(NAVY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.text(label.toUpperCase(), M, y, { charSpace: 1.2 });
+      y += 6;
+      setDraw(NAVY);
+      doc.setLineWidth(1);
+      doc.line(M, y, M + 40, y);
+      setDraw(RULE);
+      doc.setLineWidth(0.5);
+      doc.line(M + 40, y, pageW - M, y);
+      y += 14;
+    };
+
+    const body = (
+      text: string,
+      opts?: { bold?: boolean; muted?: boolean; size?: number; italic?: boolean },
+    ) => {
+      const size = opts?.size ?? 10;
+      doc.setFont(
+        "helvetica",
+        opts?.italic ? "italic" : opts?.bold ? "bold" : "normal",
+      );
+      doc.setFontSize(size);
+      setText(opts?.muted ? MUTED : INK);
+      const lines = doc.splitTextToSize(text, contentW);
+      const lh = size + 3;
+      for (const l of lines) {
+        ensure(lh);
+        doc.text(l, M, y);
+        y += lh;
+      }
+    };
+
+    const kv2col = (rows: Array<[string, string]>) => {
+      // two-column definition list, wrap-aware
+      const labelW = 130;
+      const valueW = contentW - labelW - 12;
+      doc.setFontSize(10);
+      rows.forEach(([k, v]) => {
+        doc.setFont("helvetica", "normal");
+        const valueLines = doc.splitTextToSize(v || "—", valueW);
+        const rowH = Math.max(14, valueLines.length * 13 + 2);
+        ensure(rowH);
+        setText(MUTED);
+        doc.text(k, M, y + 10);
+        setText(INK);
+        doc.setFont("helvetica", "bold");
+        valueLines.forEach((line: string, i: number) => {
+          doc.text(line, M + labelW, y + 10 + i * 13);
+        });
+        y += rowH;
+        // divider
+        setDraw(RULE);
+        doc.setLineWidth(0.3);
+        doc.line(M, y, pageW - M, y);
+        y += 2;
+      });
+      y += 4;
+    };
+
+    const table = (
+      columns: Array<{ header: string; width: number; align?: "left" | "right" }>,
+      rows: string[][],
+    ) => {
+      const rowPad = 6;
+      const lineH = 12;
+      // header
+      ensure(22);
+      setFill([248, 246, 242]);
+      doc.rect(M, y, contentW, 20, "F");
+      setText(NAVY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      let cx = M + 8;
+      columns.forEach((col) => {
+        doc.text(
+          col.header.toUpperCase(),
+          col.align === "right" ? cx + col.width - 8 : cx,
+          y + 13,
+          { align: col.align === "right" ? "right" : "left", charSpace: 0.8 },
+        );
+        cx += col.width;
+      });
+      y += 20;
+
+      // rows
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      setText(INK);
+      rows.forEach((r, ri) => {
+        // measure
+        const cellLines = r.map((cell, ci) =>
+          doc.splitTextToSize(cell || "—", columns[ci].width - 16),
+        );
+        const rowH = Math.max(...cellLines.map((l) => l.length)) * lineH + rowPad * 2;
+        ensure(rowH);
+        if (ri % 2 === 1) {
+          setFill([250, 249, 245]);
+          doc.rect(M, y, contentW, rowH, "F");
+        }
+        let x = M + 8;
+        cellLines.forEach((lines, ci) => {
+          lines.forEach((l: string, li: number) => {
+            doc.text(
+              l,
+              columns[ci].align === "right" ? x + columns[ci].width - 16 : x,
+              y + rowPad + 9 + li * lineH,
+              { align: columns[ci].align === "right" ? "right" : "left" },
+            );
+          });
+          x += columns[ci].width;
+        });
+        setDraw(RULE);
+        doc.setLineWidth(0.3);
+        doc.line(M, y + rowH, pageW - M, y + rowH);
+        y += rowH;
+      });
+      y += 8;
+    };
+
+    // ---------- applicant card ----------
+    setFill(BAND);
+    setDraw(RULE);
+    doc.setLineWidth(0.5);
+    const cardH = 78;
+    doc.roundedRect(M, y, contentW, cardH, 6, 6, "FD");
+
+    setText(MUTED);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text("APPLICANT", M + 14, y + 18, { charSpace: 1.2 });
+    setText(INK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(applicantName(), M + 14, y + 38);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(110);
-    doc.text(`Generated ${new Date().toLocaleString()}`, margin, y);
-    y += 18;
-    divider();
+    setText(MUTED);
+    doc.text(applicantAddress(), M + 14, y + 55, { maxWidth: contentW * 0.55 });
 
-    heading("Renter information");
-    kv("Household size", String(session.householdSize));
-    kv("Session started", new Date(session.startedAt).toLocaleString());
-    kv("Pay frequency", session.frequency);
-    y += 4;
+    // right column meta
+    const rightX = M + contentW - 14;
+    doc.setFontSize(9);
+    doc.text("Household size", rightX, y + 22, { align: "right" });
+    setText(INK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(String(session.householdSize), rightX, y + 36, { align: "right" });
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Pay frequency", rightX, y + 52, { align: "right" });
+    setText(INK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(session.frequency, rightX, y + 66, { align: "right" });
 
-    heading("Document checklist");
-    checklist.forEach((c) => {
-      const stateText = {
-        ok: "Provided",
-        expired: "Uploaded but expired",
-        missing: "Not uploaded",
-        skipped: "Marked as N/A",
-      }[c.state];
-      kv(DOC_LABELS[c.type], stateText);
-    });
-    y += 4;
+    y += cardH + 20;
 
-    heading("Documents reviewed");
-    const reviewed = session.docs.filter((d) => d.status !== "skipped");
-    if (reviewed.length === 0) {
-      line("No documents reviewed.", { muted: true });
-    } else {
-      reviewed.forEach((d) => kv(DOC_LABELS[d.type], d.fileName));
-    }
-    y += 4;
+    // ---------- eligibility summary card ----------
+    sectionHeader("Eligibility summary");
 
-    heading("Confirmed income information");
-    if (fields.length === 0) {
-      line("No values on record yet.", { muted: true });
-    } else {
-      fields.forEach((f) => {
-        kv(f.label, f.corrected ?? f.value);
-        line(
-          `${DOC_LABELS[f.sourceDoc]}, page ${f.sourcePage} — ${f.confidence}% confidence${f.corrected ? " — Corrected by you" : ""}`,
-          { muted: true },
-        );
-      });
-    }
-    y += 4;
+    const eligibleColor: [number, number, number] = Number.isNaN(annual)
+      ? WARN
+      : belowOrEqual
+        ? OK
+        : BAD;
+    const eligibleLabel = Number.isNaN(annual)
+      ? "Unavailable — missing confirmed income"
+      : belowOrEqual
+        ? "Annualized income is at or below the threshold"
+        : "Annualized income is above the threshold";
 
-    heading("Calculation details");
+    const summaryH = 92;
+    ensure(summaryH + 6);
+    setFill([252, 251, 248]);
+    setDraw(RULE);
+    doc.roundedRect(M, y, contentW, summaryH, 6, 6, "FD");
+    // left accent bar
+    setFill(eligibleColor);
+    doc.rect(M, y, 4, summaryH, "F");
+
+    setText(MUTED);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text("ANNUALIZED INCOME", M + 18, y + 20, { charSpace: 1.2 });
+    setText(INK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text(Number.isNaN(annual) ? "—" : currency(annual), M + 18, y + 46);
+
+    // vs threshold
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(
+      `Threshold: ${currency(THRESHOLD.amount)} (${THRESHOLD.label})`,
+      M + 18,
+      y + 64,
+    );
+    setText(eligibleColor);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(eligibleLabel, M + 18, y + 80);
+
+    y += summaryH + 22;
+
+    // ---------- calculation breakdown ----------
+    sectionHeader("Calculation breakdown");
     if (Number.isNaN(annual)) {
-      line("Calculation unavailable — missing confirmed income or frequency.", {
-        bold: true,
+      body("Calculation unavailable — missing confirmed income or frequency.", {
+        italic: true,
+        muted: true,
       });
     } else {
-      income.contributions.forEach((c) => {
-        line(`• ${c.label}: ${c.formula} = ${currency(c.amount)} / year`);
-      });
-      kv("Annualized income", currency(annual));
-      kv("Threshold", currency(THRESHOLD.amount));
-      kv(
-        "Comparison",
-        belowOrEqual ? "Below or equal to threshold" : "Above threshold",
+      table(
+        [
+          { header: "Source", width: contentW * 0.35 },
+          { header: "Formula", width: contentW * 0.45 },
+          { header: "Annual total", width: contentW * 0.2, align: "right" },
+        ],
+        income.contributions.map((c) => [c.label, c.formula, currency(c.amount)]),
+      );
+      // totals row
+      ensure(24);
+      setFill(NAVY);
+      doc.rect(M, y, contentW, 22, "F");
+      setText([255, 255, 255]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("ANNUALIZED INCOME", M + 8, y + 15, { charSpace: 0.8 });
+      doc.text(currency(annual), M + contentW - 8, y + 15, { align: "right" });
+      y += 30;
+    }
+
+    // ---------- document checklist ----------
+    sectionHeader("Document checklist");
+    table(
+      [
+        { header: "Document", width: contentW * 0.6 },
+        { header: "Status", width: contentW * 0.4, align: "right" },
+      ],
+      checklist.map((c) => [
+        DOC_LABELS[c.type],
+        {
+          ok: "Provided",
+          expired: "Uploaded but expired",
+          missing: "Not uploaded",
+          skipped: "Marked as N/A",
+        }[c.state],
+      ]),
+    );
+
+    // ---------- documents reviewed ----------
+    const reviewed = session.docs.filter((d) => d.status !== "skipped");
+    sectionHeader("Documents provided");
+    if (reviewed.length === 0) {
+      body("No documents provided.", { italic: true, muted: true });
+    } else {
+      table(
+        [
+          { header: "Type", width: contentW * 0.4 },
+          { header: "File name", width: contentW * 0.6 },
+        ],
+        reviewed.map((d) => [DOC_LABELS[d.type], d.fileName]),
       );
     }
-    y += 4;
 
-    heading("Items that need review");
-    if (needsReview.length === 0) {
-      line("Everything is confirmed.");
+    // ---------- confirmed values ----------
+    sectionHeader("Confirmed values");
+    if (fields.length === 0) {
+      body("No values on record.", { italic: true, muted: true });
     } else {
-      needsReview.forEach((f) => line(`• ${f.label} — ${f.corrected ?? f.value}`));
+      table(
+        [
+          { header: "Field", width: contentW * 0.32 },
+          { header: "Value", width: contentW * 0.28 },
+          { header: "Source", width: contentW * 0.28 },
+          { header: "Conf.", width: contentW * 0.12, align: "right" },
+        ],
+        fields.map((f) => [
+          f.label + (f.corrected ? "  (corrected)" : ""),
+          f.corrected ?? f.value,
+          `${DOC_LABELS[f.sourceDoc]}, p.${f.sourcePage}`,
+          `${f.confidence}%`,
+        ]),
+      );
     }
-    y += 4;
 
-    heading("Sources used");
-    kv("Source", THRESHOLD.source);
-    kv("Value used", `${THRESHOLD.label} = ${currency(THRESHOLD.amount)}`);
-    kv("Effective", THRESHOLD.effective);
-    kv("Page", String(THRESHOLD.page));
-    kv("URL", THRESHOLD.url);
+    // ---------- items needing review ----------
+    if (needsReview.length > 0) {
+      sectionHeader("Items still needing review");
+      needsReview.forEach((f) =>
+        body(`•  ${f.label} — ${f.corrected ?? f.value}`, { size: 10 }),
+      );
+      y += 4;
+    }
 
-    divider();
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    const footer = doc.splitTextToSize(
-      "RentSmooth organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
-      maxWidth,
+    // ---------- reference source ----------
+    sectionHeader("Reference source");
+    kv2col([
+      ["Source", THRESHOLD.source],
+      ["Value used", `${THRESHOLD.label} = ${currency(THRESHOLD.amount)}`],
+      ["Effective", THRESHOLD.effective],
+      ["Page", String(THRESHOLD.page)],
+      ["URL", THRESHOLD.url],
+    ]);
+
+    // ---------- disclaimer ----------
+    sectionHeader("How this packet was produced");
+    body(
+      "RentSmooth extracts values from renter-provided documents. The renter reviewed and confirmed every value used in the calculation above. RentSmooth performs a factual comparison against the referenced HUD threshold; it does not decide, approve, or deny eligibility. No demographic data is collected or inferred. Document contents are processed ephemerally and cleared when the session ends.",
+      { size: 9, muted: true },
     );
-    footer.forEach((f: string) => {
-      ensureSpace(12);
-      doc.text(f, margin, y);
-      y += 12;
-    });
 
-    doc.save("rentsmooth-packet.pdf");
+    // ---------- page numbers ----------
+    const pageCount = doc.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      addFooter(p);
+    }
+
+    return doc;
+  }
+
+  function downloadPdf() {
+    const pdf = buildPdf();
+    pdf.save("rentsmooth-packet.pdf");
     setAnnouncement("PDF packet downloaded to your device.");
   }
+
+  function openPdfPreview() {
+    const pdf = buildPdf();
+    const url = pdf.output("bloburl");
+    setPreviewUrl(String(url));
+    setPreview(true);
+    setAnnouncement("Packet preview ready.");
+  }
+
 
 
   function deletePacket() {
@@ -288,11 +549,11 @@ function PacketPage() {
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          onClick={() => setPreview(true)}
+          onClick={openPdfPreview}
           className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Eye className="h-4 w-4" aria-hidden="true" />
-          Preview packet
+          Preview PDF
         </button>
         <button
           type="button"
@@ -478,48 +739,51 @@ function PacketPage() {
         )}
       </Section>
 
-      {preview && (
+      {preview && previewUrl && (
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="preview-title"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex flex-col bg-black/60 p-0 sm:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPreview(false);
+              setPreviewUrl(null);
+            }
+          }}
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-background p-5 shadow-xl sm:rounded-2xl">
-            <div className="flex items-center justify-between">
-              <h2 id="preview-title" className="text-lg font-semibold">
+          <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden bg-background shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3">
+              <h2 id="preview-title" className="font-serif text-lg font-semibold">
                 Packet preview
               </h2>
-              <button
-                type="button"
-                onClick={() => setPreview(false)}
-                aria-label="Close preview"
-                className="inline-flex h-10 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={downloadPdf}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreview(false);
+                    setPreviewUrl(null);
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  Close preview
+                </button>
+              </div>
             </div>
-            <div className="mt-3 space-y-3 text-sm">
-              <p>
-                <strong>Annualized income:</strong>{" "}
-                {Number.isNaN(annual) ? "—" : currency(annual)}
-              </p>
-              <p>
-                <strong>Threshold:</strong> {currency(THRESHOLD.amount)} ({THRESHOLD.label})
-              </p>
-              <p>
-                <strong>Comparison:</strong>{" "}
-                {Number.isNaN(annual)
-                  ? "unavailable"
-                  : belowOrEqual
-                    ? "below or equal"
-                    : "above"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Full details are in the sections on this page.
-              </p>
-            </div>
+            <iframe
+              title="Packet PDF preview"
+              src={previewUrl}
+              className="h-full w-full flex-1 bg-muted"
+            />
           </div>
         </div>
       )}

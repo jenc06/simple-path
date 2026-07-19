@@ -32,7 +32,7 @@ import {
 
 export const Route = createFileRoute("/packet")({
   head: () => ({
-    meta: [{ title: "Your packet — RentSmooth" }],
+    meta: [{ title: "Your packet — SimplePath" }],
   }),
   component: PacketPage,
 });
@@ -144,7 +144,7 @@ function buildReviewerHandoff({
     missingItems,
     expiredItems,
     openItems,
-    decisionBoundary: "Factual comparison only; RentSmooth does not approve or deny eligibility.",
+    decisionBoundary: "Factual comparison only; SimplePath does not approve or deny eligibility.",
   };
 }
 
@@ -581,7 +581,7 @@ function PacketPage() {
       doc.setFont("times", "normal");
       doc.setFontSize(8);
       doc.text(
-        "RentSmooth organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
+        "SimplePath organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
         M,
         pageH - footerH + 14,
         { maxWidth: contentW - 120 },
@@ -972,7 +972,7 @@ function PacketPage() {
 
     sectionHeader("How this packet was produced");
     body(
-      "RentSmooth extracts values from renter-provided documents. The renter reviewed and confirmed every value used in the calculation above. RentSmooth performs a factual comparison against the referenced HUD threshold; it does not decide, approve, or deny eligibility. No demographic data is collected or inferred. Document contents are processed ephemerally and cleared when the session ends.",
+      "SimplePath extracts values from renter-provided documents. The renter reviewed and confirmed every value used in the calculation above. SimplePath performs a factual comparison against the referenced HUD threshold; it does not decide, approve, or deny eligibility. No demographic data is collected or inferred. Document contents are processed ephemerally and cleared when the session ends.",
       { size: 9, muted: true },
     );
 

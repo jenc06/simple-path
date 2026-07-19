@@ -13,7 +13,7 @@ import { fetchReferenceEvidence, frozenReferenceEvidence } from "@/lib/reference
 
 export const Route = createFileRoute("/calculation")({
   head: () => ({
-    meta: [{ title: "Calculation — RentSmooth" }],
+    meta: [{ title: "Calculation — SimplePath" }],
   }),
   component: CalculationPage,
 });

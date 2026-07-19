@@ -280,7 +280,7 @@ function extractOutputText(output: unknown[] | undefined): string {
 
 function systemPrompt(): string {
   return [
-    "You are RentSmooth Help Chat. Answer only from the JSON snapshot provided by the user message.",
+    "You are SimplePath Help Chat. Answer only from the JSON snapshot provided by the user message.",
     "Allowed sources are: extracted/uploaded input fields, confirmed/corrected values, duplicate-income review choices, snapshot.securityGuide, and allowlisted HUD reference chunks in the snapshot.",
     "Never infer missing values. If a value is not present, say it is not in the provided inputs.",
     "Never decide, approve, deny, rank, recommend an outcome, or tell the user what decision to make.",

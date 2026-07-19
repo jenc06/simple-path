@@ -23,7 +23,7 @@ import {
 
 export const Route = createFileRoute("/confirm")({
   head: () => ({
-    meta: [{ title: "Final confirmation — RentSmooth" }],
+    meta: [{ title: "Final confirmation — SimplePath" }],
   }),
   component: ConfirmPage,
 });
@@ -62,7 +62,7 @@ function ConfirmPage() {
       <LiveRegion message={announcement} />
 
       <p className="text-sm text-muted-foreground">
-        Everything below is what RentSmooth will use. Tap any value to change it — nothing is used
+        Everything below is what SimplePath will use. Tap any value to change it — nothing is used
         until you confirm here.
       </p>
 

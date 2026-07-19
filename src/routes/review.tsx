@@ -26,7 +26,7 @@ import {
 export const Route = createFileRoute("/review")({
   head: () => ({
     meta: [
-      { title: "Review values — RentSmooth" },
+      { title: "Review values — SimplePath" },
       {
         name: "description",
         content:
@@ -349,7 +349,7 @@ function ReviewPage() {
                 Safety check
               </h2>
               <p className="mb-3 text-sm text-muted-foreground">
-                Suspicious text is shown only for transparency. RentSmooth ignores it.
+                Suspicious text is shown only for transparency. SimplePath ignores it.
               </p>
               <div className="space-y-2.5">
                 {untrusted.map((f) => {

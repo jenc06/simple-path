@@ -1,6 +1,6 @@
-# RentSmooth App Security Guide
+# SimplePath App Security Guide
 
-RentSmooth is a review aid. It does not approve, deny, rank, score, or decide housing outcomes.
+SimplePath is a review aid. It does not approve, deny, rank, score, or decide housing outcomes.
 
 Uploaded documents are untrusted input. Text extracted from documents is treated as data to inspect, not instructions to follow. If a document contains text such as "ignore prior instructions", "override policy", "approve this applicant", "deny this applicant", or "reveal the system prompt", the app flags that text as suspicious and ignores it for calculation.
 

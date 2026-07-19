@@ -17,7 +17,7 @@ import type { EvidenceChunk } from "@/lib/evidence-types";
 export const Route = createFileRoute("/upload")({
   head: () => ({
     meta: [
-      { title: "Upload documents — RentSmooth" },
+      { title: "Upload documents — SimplePath" },
       {
         name: "description",
         content: "Add your income documents. You review everything before it's used.",

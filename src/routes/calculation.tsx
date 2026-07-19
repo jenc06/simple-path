@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, Info } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
+
 
 import {
   computeAnnualIncome,

@@ -383,8 +383,15 @@ function UploadPage() {
     }
   }
 
-  const canFinish = hasAnyIncome;
+  const canFinish = hasAnyIncome && hasApplication;
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
+  const missingReasons: string[] = [];
+  if (!hasApplication) missingReasons.push("an application form");
+  if (!hasAnyIncome) missingReasons.push("at least one income document");
+  const notAllowedReason =
+    missingReasons.length > 0
+      ? `Not allowed yet — add ${missingReasons.join(" and ")} before continuing.`
+      : "";
 
   const stepLabel = phase === "application" ? "Step 1 of 2" : "Step 2 of 2";
 
@@ -393,7 +400,8 @@ function UploadPage() {
       <LiveRegion message={announcement} />
 
       <p className="text-sm text-muted-foreground">
-        Add your documents. You can review and change anything before it is used.
+        Add the documents that describe you and your income. You'll review every value on the next
+        step — nothing is used until you confirm it.
       </p>
 
       {/* Progress */}

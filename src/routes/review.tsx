@@ -139,8 +139,14 @@ function ReviewPage() {
     );
   }
 
-  const previewField: ExtractedField | undefined =
-    activeMerged && activeSource
+  const activeUntrusted: ExtractedField | undefined =
+    activeKey?.startsWith("untrusted::")
+      ? untrusted.find((f) => `untrusted::${f.id}` === activeKey)
+      : undefined;
+
+  const previewField: ExtractedField | undefined = activeUntrusted
+    ? activeUntrusted
+    : activeMerged && activeSource
       ? {
           id: activeSource.fieldId,
           key: activeMerged.key,
@@ -177,13 +183,13 @@ function ReviewPage() {
       </div>
 
       {/* Sticky preview */}
-      {previewField && activeMerged && (
+      {previewField && (
         <div className="sticky top-[64px] z-20 -mx-4 mb-4 border-b bg-background/95 px-4 py-3 backdrop-blur">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Currently reviewing
+            {activeUntrusted ? "Currently viewing (suspicious — ignored)" : "Currently reviewing"}
           </p>
           <p className="text-sm font-semibold">
-            {activeMerged.label}{" "}
+            {activeUntrusted ? "Suspicious instruction" : activeMerged?.label}{" "}
             <span className="font-normal text-muted-foreground">
               — {DOC_LABELS[previewField.sourceDoc]}, page {previewField.sourcePage}
             </span>
@@ -192,7 +198,7 @@ function ReviewPage() {
             <DocPreview field={previewField} />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Yellow box shows where this value was found.
+            Yellow box shows where this {activeUntrusted ? "text" : "value"} was found.
           </p>
         </div>
       )}
@@ -269,9 +275,19 @@ function ReviewPage() {
             or confirm these items.
           </p>
           <div className="space-y-3">
-            {untrusted.map((f) => (
-              <UntrustedCard key={f.id} field={f} isActive={false} onActivate={() => {}} />
-            ))}
+            {untrusted.map((f) => {
+              const uKey = `untrusted::${f.id}`;
+              const isActive = activeKey === uKey;
+              return (
+                <div key={f.id} ref={isActive ? activeCardRef : undefined}>
+                  <UntrustedCard
+                    field={f}
+                    isActive={isActive}
+                    onActivate={() => setActiveKey(uKey)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

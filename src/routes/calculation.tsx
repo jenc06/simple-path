@@ -92,30 +92,58 @@ function CalculationPage() {
               id="calc"
               className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
             >
-              Your annualized income
+              1. Your annualized income
             </h2>
             <p className="mt-1 text-4xl font-bold tracking-tight">{currency(result.annual)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Total annualized income across all confirmed sources.
+            </p>
 
-            <dl className="mt-5 space-y-3 text-sm">
+            <h3 className="mt-5 text-sm font-semibold text-foreground">Contributions</h3>
+            <ol className="mt-2 space-y-3 text-sm">
               {result.contributions.map((c, i) => (
-                <div key={i} className="rounded-md border bg-background p-3">
-                  <dt className="text-muted-foreground">{c.label}</dt>
-                  <dd className="mt-1 font-mono text-sm">{c.formula}</dd>
-                  <dd className="mt-0.5 text-sm font-semibold">= {currency(c.amount)} / year</dd>
-                </div>
+                <li
+                  key={i}
+                  className="rounded-md border bg-background p-3"
+                  aria-label={`Contribution ${i + 1} of ${result.contributions.length}`}
+                >
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Contribution {i + 1}
+                  </p>
+                  <dl className="mt-2 grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
+                    <dt className="text-muted-foreground">Source</dt>
+                    <dd className="font-medium">{c.label}</dd>
+
+                    <dt className="text-muted-foreground">Formula</dt>
+                    <dd className="font-mono text-[0.85rem]">{c.formula}</dd>
+
+                    <dt className="text-muted-foreground">Annualized amount</dt>
+                    <dd className="font-semibold">{currency(c.amount)} / year</dd>
+
+                    <dt className="text-muted-foreground">Documents used</dt>
+                    <dd className="text-xs text-muted-foreground">
+                      {c.documentIds.length} document{c.documentIds.length === 1 ? "" : "s"}
+                    </dd>
+                  </dl>
+                </li>
               ))}
-              <div className="border-t pt-3">
-                <dt className="text-muted-foreground">Total annualized</dt>
-                <dd className="text-lg font-bold">{currency(result.annual)}</dd>
-              </div>
-            </dl>
+              <li className="border-t pt-3">
+                <dl className="grid grid-cols-1 gap-y-1 sm:grid-cols-[10rem_1fr]">
+                  <dt className="text-muted-foreground">Total annualized</dt>
+                  <dd className="text-lg font-bold">{currency(result.annual)}</dd>
+                </dl>
+              </li>
+            </ol>
 
             {result.errors.length > 0 && (
               <div
                 role="alert"
                 className="mt-4 rounded-md border border-amber-500/60 bg-amber-50 p-3 text-sm text-amber-900"
               >
-                <p className="font-semibold">Some sources could not be included:</p>
+                <p className="flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                  <span>Warning — some sources could not be included:</span>
+                </p>
                 <ul className="mt-1 list-disc pl-5">
                   {result.errors.map((e) => (
                     <li key={e}>{e}</li>
@@ -130,20 +158,43 @@ function CalculationPage() {
               id="cmp"
               className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
             >
-              Comparison to threshold
+              2. Comparison to threshold
             </h2>
-            <div className="mt-3 flex items-center gap-3">
+
+            <dl className="mt-3 grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
+              <dt className="text-muted-foreground">Confirmed value</dt>
+              <dd className="font-semibold">{currency(result.annual)} (annualized income)</dd>
+
+              <dt className="text-muted-foreground">Threshold</dt>
+              <dd className="font-semibold">
+                {currency(threshold.amount)} ({threshold.label})
+              </dd>
+
+              <dt className="text-muted-foreground">Formula</dt>
+              <dd className="font-mono text-[0.85rem]">
+                {currency(result.annual)} {belowOrEqual ? "≤" : ">"} {currency(threshold.amount)}
+              </dd>
+
+              <dt className="text-muted-foreground">Source</dt>
+              <dd className="font-medium">{threshold.source}</dd>
+
+              <dt className="text-muted-foreground">Effective date</dt>
+              <dd className="font-medium">{threshold.effective}</dd>
+            </dl>
+
+            <div className="mt-3 flex items-center gap-3" aria-hidden="true">
               <span className="text-2xl font-semibold">{currency(result.annual)}</span>
-              <ArrowRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <ArrowRight className="h-5 w-5 text-muted-foreground" />
               <span className="text-2xl font-semibold">{currency(threshold.amount)}</span>
             </div>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Rule effective date: {threshold.effective}
-            </p>
+
             <p
-              className="mt-3 inline-flex items-center rounded-full border border-slate-700/40 bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900"
+              className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-700/40 bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900"
             >
-              Result: your income is {belowOrEqual ? "below or equal to" : "above"} the threshold.
+              <Info className="h-4 w-4" aria-hidden="true" />
+              <span>
+                Result: your income is {belowOrEqual ? "below or equal to" : "above"} the threshold.
+              </span>
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
               This is a factual comparison. It is not an approval, denial, or score.
@@ -155,56 +206,51 @@ function CalculationPage() {
               id="src"
               className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
             >
-              Rule source
+              3. Rule source and evidence
             </h2>
-            <dl className="mt-2 space-y-2 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Source</dt>
-                <dd className="font-medium">{threshold.source}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Evidence mode</dt>
-                <dd className="font-medium">
-                  {referenceEvidence.fetchedWithTavily
-                    ? "Tavily Extract from allowlisted HUD URLs"
-                    : "Frozen local HUD reference"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Value used</dt>
-                <dd className="font-medium">
-                  {threshold.label} = {currency(threshold.amount)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Effective date</dt>
-                <dd className="font-medium">{threshold.effective}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Page</dt>
-                <dd className="font-medium">{threshold.page}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">URL</dt>
-                <dd className="break-all">
-                  <a
-                    href={pdfPageUrl(threshold.url, threshold.page)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    {pdfPageUrl(threshold.url, threshold.page)}
-                  </a>
-                </dd>
-              </div>
+            <dl className="mt-2 grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
+              <dt className="text-muted-foreground">Source</dt>
+              <dd className="font-medium">{threshold.source}</dd>
+
+              <dt className="text-muted-foreground">Evidence mode</dt>
+              <dd className="font-medium">
+                {referenceEvidence.fetchedWithTavily
+                  ? "Tavily Extract from allowlisted HUD URLs"
+                  : "Frozen local HUD reference"}
+              </dd>
+
+              <dt className="text-muted-foreground">Value used</dt>
+              <dd className="font-medium">
+                {threshold.label} = {currency(threshold.amount)}
+              </dd>
+
+              <dt className="text-muted-foreground">Effective date</dt>
+              <dd className="font-medium">{threshold.effective}</dd>
+
+              <dt className="text-muted-foreground">Page</dt>
+              <dd className="font-medium">{threshold.page}</dd>
+
+              <dt className="text-muted-foreground">URL</dt>
+              <dd className="break-all">
+                <a
+                  href={pdfPageUrl(threshold.url, threshold.page)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {pdfPageUrl(threshold.url, threshold.page)}
+                </a>
+              </dd>
+
               {referenceEvidence.chunks.length > 0 && (
-                <div>
+                <>
                   <dt className="text-muted-foreground">Evidence snippet</dt>
                   <dd className="font-medium">{referenceEvidence.chunks[0].text}</dd>
-                </div>
+                </>
               )}
             </dl>
           </section>
+
 
           <button
             type="button"

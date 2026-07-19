@@ -490,9 +490,10 @@ function PacketPage() {
                 type="button"
                 onClick={() => setPreview(false)}
                 aria-label="Close preview"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="inline-flex h-10 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <X className="h-5 w-5" aria-hidden="true" />
+                <X className="h-4 w-4" aria-hidden="true" />
+                Close
               </button>
             </div>
             <div className="mt-3 space-y-3 text-sm">

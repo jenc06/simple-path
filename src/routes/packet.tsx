@@ -39,6 +39,7 @@ function PacketPage() {
   const { session, setSession } = useSession();
   const [showJson, setShowJson] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
   const fields = useMemo(() => allFields(session), [session]);

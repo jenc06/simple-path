@@ -15,7 +15,7 @@ import {
 
 export const Route = createFileRoute("/packet")({
   head: () => ({
-    meta: [{ title: "Your packet — Income Check" }],
+    meta: [{ title: "Your packet — RentSmooth" }],
   }),
   component: PacketPage,
 });

@@ -7,7 +7,7 @@ import { DOC_LABELS, allFields, useSession } from "@/lib/session-store";
 
 export const Route = createFileRoute("/confirm")({
   head: () => ({
-    meta: [{ title: "Final confirmation — Income Check" }],
+    meta: [{ title: "Final confirmation — RentSmooth" }],
   }),
   component: ConfirmPage,
 });

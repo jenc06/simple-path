@@ -78,13 +78,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Income Check — Clear, private income review" },
+      { title: "RentSmooth — Clear, private income review" },
       {
         name: "description",
         content:
           "A calm, accessible tool that helps renters review the income documents they upload — you stay in control of every value.",
       },
-      { property: "og:title", content: "Income Check" },
+      { property: "og:title", content: "RentSmooth" },
       {
         property: "og:description",
         content: "Review income documents with full control and full transparency.",

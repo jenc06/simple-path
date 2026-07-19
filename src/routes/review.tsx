@@ -8,7 +8,7 @@ import { DOC_LABELS, allFields, useSession } from "@/lib/session-store";
 export const Route = createFileRoute("/review")({
   head: () => ({
     meta: [
-      { title: "Review values — Income Check" },
+      { title: "Review values — RentSmooth" },
       { name: "description", content: "Confirm each extracted value one at a time." },
     ],
   }),

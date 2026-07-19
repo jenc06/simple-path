@@ -1,5 +1,5 @@
 import { useRouter } from "@tanstack/react-router";
-import { ArrowLeft, MessageCircle, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, Lock, MessageCircle, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useSession } from "@/lib/session-store";
 

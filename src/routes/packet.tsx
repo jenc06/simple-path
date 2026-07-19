@@ -149,7 +149,7 @@ function buildReviewerHandoff({
 }
 
 function PacketPage() {
-  const { session, setSession, recordAudit, finalizePacket, deleteSession } = useSession();
+  const { session, recordAudit, finalizePacket, deleteSession } = useSession();
   const navigate = useNavigate();
   const [showJson, setShowJson] = useState(false);
   const [preview, setPreview] = useState(false);

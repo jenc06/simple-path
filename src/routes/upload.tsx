@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Check, FileText, Upload } from "lucide-react";
+import { AlertTriangle, Check, FileText, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import {
@@ -128,6 +128,23 @@ function UploadPage() {
     if (stepIdx < STEPS.length - 1) setStepIdx(stepIdx + 1);
   }
 
+  function prev() {
+    if (stepIdx > 0) setStepIdx(stepIdx - 1);
+  }
+
+  function deleteDoc(id: string) {
+    const doc = session.docs.find((d) => d.id === id);
+    setSession((s) => ({
+      ...s,
+      docs: s.docs.filter((d) => d.id !== id),
+    }));
+    if (doc) {
+      setAnnouncement(
+        `${DOC_LABELS[doc.type]} removed. You can upload it again or continue.`,
+      );
+    }
+  }
+
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
   const canFinish = session.docs.length > 0;
 
@@ -209,6 +226,16 @@ function UploadPage() {
           >
             I do not have this
           </button>
+          {stepIdx > 0 && (
+            <button
+              type="button"
+              onClick={prev}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Go back to the previous document"
+            >
+              Back to previous document
+            </button>
+          )}
         </div>
       </section>
 
@@ -228,30 +255,42 @@ function UploadPage() {
                   <span className="font-medium">{DOC_LABELS[d.type]}</span>
                   <span className="ml-2 text-muted-foreground">{d.fileName}</span>
                 </span>
-                <span
-                  className={
-                    "ml-3 inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium " +
-                    (d.status === "uploaded"
-                      ? "border border-emerald-600/30 bg-emerald-50 text-emerald-800"
-                      : d.status === "expired"
-                        ? "border border-amber-600/40 bg-amber-50 text-amber-900"
-                        : "border border-input bg-muted text-muted-foreground")
-                  }
-                >
-                  {d.status === "uploaded" && (
-                    <>
-                      <Check className="h-3 w-3" aria-hidden="true" />
-                      Uploaded
-                    </>
-                  )}
-                  {d.status === "expired" && (
-                    <>
-                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                      Old — allowed
-                    </>
-                  )}
-                  {d.status === "skipped" && "Not provided"}
-                </span>
+                <div className="ml-3 flex items-center gap-2">
+                  <span
+                    className={
+                      "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium " +
+                      (d.status === "uploaded"
+                        ? "border border-emerald-600/30 bg-emerald-50 text-emerald-800"
+                        : d.status === "expired"
+                          ? "border border-amber-600/40 bg-amber-50 text-amber-900"
+                          : "border border-input bg-muted text-muted-foreground")
+                    }
+                  >
+                    {d.status === "uploaded" && (
+                      <>
+                        <Check className="h-3 w-3" aria-hidden="true" />
+                        Uploaded
+                      </>
+                    )}
+                    {d.status === "expired" && (
+                      <>
+                        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                        Old — allowed
+                      </>
+                    )}
+                    {d.status === "skipped" && "Not provided"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => deleteDoc(d.id)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={`Remove ${DOC_LABELS[d.type]}`}
+                    title={`Remove ${DOC_LABELS[d.type]}`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Remove</span>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

@@ -632,20 +632,11 @@ function CanonicalIncomeSourceEditor({
           {error}
         </p>
       )}
-      {savedAt !== null && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mt-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-semibold text-foreground"
-        >
-          Saved — these values are now stored and will be used for the calculation.
-        </div>
-      )}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
         <button
           type="button"
           onClick={save}
-          className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 flex-1 items-center justify-center whitespace-normal text-balance rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {savedAt !== null ? "Saved — values stored" : "Save values for this income source"}
         </button>
@@ -656,11 +647,20 @@ function CanonicalIncomeSourceEditor({
             onSave(undefined);
             setSavedAt(null);
           }}
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 flex-1 items-center justify-center whitespace-normal text-balance rounded-md border border-input px-4 py-2 text-center text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Revert to original/source value
         </button>
       </div>
+      {savedAt !== null && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-semibold text-foreground"
+        >
+          Saved — these values are now stored and will be used for the calculation.
+        </div>
+      )}
     </div>
   );
 }

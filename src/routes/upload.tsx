@@ -231,15 +231,6 @@ function UploadPage() {
       )}
 
       <div className="mt-8 flex flex-col gap-2">
-        {stepIdx < STEPS.length - 1 ? (
-          <button
-            type="button"
-            onClick={next}
-            className="inline-flex h-11 w-full items-center justify-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            Skip to next document
-          </button>
-        ) : null}
         <button
           type="button"
           disabled={!canFinish}

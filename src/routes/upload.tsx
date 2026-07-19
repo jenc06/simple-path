@@ -243,14 +243,28 @@ function UploadPage() {
             <Upload className="h-4 w-4" aria-hidden="true" />
             Upload file(s)
           </button>
-          <button
-            type="button"
-            onClick={skip}
-            className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={`I do not have a ${DOC_LABELS[currentType]}`}
-          >
-            I do not have this
-          </button>
+          {session.docs.some(
+            (d) => d.type === currentType && d.status !== "skipped",
+          ) ? (
+            <button
+              type="button"
+              onClick={next}
+              disabled={stepIdx === STEPS.length - 1}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={`Keep the ${DOC_LABELS[currentType]} you already added and continue`}
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={skip}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label={`I do not have a ${DOC_LABELS[currentType]}`}
+            >
+              I do not have this
+            </button>
+          )}
           {stepIdx > 0 && (
             <button
               type="button"

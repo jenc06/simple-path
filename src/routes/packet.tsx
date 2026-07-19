@@ -1456,6 +1456,32 @@ function PacketPage() {
         )}
       </Section>
 
+      <Section title="Finish and clear your data">
+        <p className="text-sm text-muted-foreground">
+          Download or export your packet first. When you're finished, use the button below to
+          erase this session and all associated information from this browser. This cannot be
+          undone.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (previewUrl) {
+              URL.revokeObjectURL(previewUrl);
+              setPreviewUrl(null);
+            }
+            setPreview(false);
+            recordAudit("session_delete_from_packet", { route: "/packet", status: "deleted" });
+            deleteSession();
+            setAnnouncement("Session and all associated information deleted.");
+            navigate({ to: "/" });
+          }}
+          className="mt-3 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-destructive/40 px-4 text-sm font-semibold text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          Done — delete session and all associated information
+        </button>
+      </Section>
+
       {preview && previewUrl && (
         <div
           ref={dialogRef}

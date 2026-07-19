@@ -53,37 +53,8 @@ const initialSample = (): SessionState => ({
   startedAt: new Date().toISOString(),
   frequency: "biweekly",
   householdSize: 1,
-  docs: [
-    {
-      id: "d1",
-      type: "pay_stub",
-      fileName: "paystub_june_2026.pdf",
-      status: "uploaded",
-      documentDate: "2026-06-30",
-      fields: [
-        {
-          id: "f1",
-          label: "Pay before taxes",
-          value: "$2,166.00",
-          confidence: 96,
-          sourceDoc: "pay_stub",
-          sourcePage: 1,
-          bbox: { x: 55, y: 34, w: 30, h: 6 },
-          confirmed: false,
-        },
-        {
-          id: "f2",
-          label: "Pay frequency",
-          value: "Every 2 weeks",
-          confidence: 91,
-          sourceDoc: "pay_stub",
-          sourcePage: 1,
-          bbox: { x: 12, y: 46, w: 28, h: 6 },
-          confirmed: false,
-        },
-      ],
-    },
-  ],
+  docs: [],
+
 });
 
 interface Ctx {

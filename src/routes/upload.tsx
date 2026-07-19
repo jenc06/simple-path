@@ -58,9 +58,11 @@ function UploadPage() {
     setSession((s) => ({
       ...s,
       docs: [
-        ...s.docs.filter((d) => d.type !== type),
+        // Keep prior docs of this type so users can add multiple (e.g. two pay stubs).
+        // Only replace a prior "skipped" placeholder for this type.
+        ...s.docs.filter((d) => !(d.type === type && d.status === "skipped")),
         {
-          id: `${type}-${Date.now()}`,
+          id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           type,
           fileName,
           documentDate,
@@ -76,34 +78,53 @@ function UploadPage() {
   }
 
   function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     // Reset so choosing the same file again still fires change.
     e.target.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
 
     const MAX_BYTES = 20 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
+    let addedCount = 0;
+    let pendingOld: null | { docType: DocType; fileName: string; date: string } = null;
+    let tooLarge = 0;
+
+    for (const file of files) {
+      if (file.size > MAX_BYTES) {
+        tooLarge += 1;
+        continue;
+      }
+      const fileName = file.name;
+      const date = new Date(file.lastModified).toISOString().slice(0, 10);
+
+      if (date < DATE_CUTOFF) {
+        // Queue the first old-dated file for confirmation; skip any others in this batch.
+        if (!pendingOld) {
+          pendingOld = { docType: currentType, fileName, date };
+        }
+        continue;
+      }
+      addDoc(currentType, fileName, date, "uploaded");
+      addedCount += 1;
+    }
+
+    const sizeMsg = tooLarge > 0 ? ` ${tooLarge} file${tooLarge === 1 ? " was" : "s were"} larger than 20 MB and skipped.` : "";
+
+    if (pendingOld) {
+      setOldDatePending(pendingOld);
       setAnnouncement(
-        `That file is larger than 20 MB. Please choose a smaller file.`,
+        `${addedCount} file${addedCount === 1 ? "" : "s"} added. One older file needs your confirmation.${sizeMsg}`,
       );
       return;
     }
 
-    const fileName = file.name;
-    const date = new Date(file.lastModified).toISOString().slice(0, 10);
-
-    if (date < DATE_CUTOFF) {
-      setOldDatePending({ docType: currentType, fileName, date });
+    if (addedCount > 0) {
       setAnnouncement(
-        `This ${DOC_LABELS[currentType]} is dated ${date}, which is more than 60 days before ${TODAY}. Confirmation required.`,
+        `${addedCount} ${DOC_LABELS[currentType]} file${addedCount === 1 ? "" : "s"} added. Moved to next document.${sizeMsg}`,
       );
-      return;
+      next();
+    } else if (tooLarge > 0) {
+      setAnnouncement(`No files added.${sizeMsg}`);
     }
-    addDoc(currentType, fileName, date, "uploaded");
-    setAnnouncement(
-      `${DOC_LABELS[currentType]} uploaded: ${fileName}. Moved to next document.`,
-    );
-    next();
   }
 
   function skip() {
@@ -193,9 +214,12 @@ function UploadPage() {
             {alreadyDone.has(currentType) && (
               <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                 <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                Already added — you can replace it.
+                Already added — you can add more or replace it.
               </p>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              You can select more than one file at a time.
+            </p>
           </div>
         </div>
 
@@ -204,6 +228,7 @@ function UploadPage() {
             ref={fileInputRef}
             type="file"
             accept="application/pdf,image/*"
+            multiple
             className="sr-only"
             onChange={handleFileChosen}
             aria-hidden="true"
@@ -213,10 +238,10 @@ function UploadPage() {
             type="button"
             onClick={openFilePicker}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={`Upload a file for ${DOC_LABELS[currentType]}`}
+            aria-label={`Upload one or more files for ${DOC_LABELS[currentType]}`}
           >
             <Upload className="h-4 w-4" aria-hidden="true" />
-            Upload a file
+            Upload file(s)
           </button>
           <button
             type="button"

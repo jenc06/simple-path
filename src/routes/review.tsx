@@ -632,7 +632,7 @@ function CanonicalIncomeSourceEditor({
           {error}
         </p>
       )}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={save}
@@ -645,11 +645,21 @@ function CanonicalIncomeSourceEditor({
           onClick={() => {
             setDraft(details.suggested);
             onSave(undefined);
+            setSavedAt(null);
           }}
           className="inline-flex h-10 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Revert to original/source value
         </button>
+        {savedAt !== null && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm font-semibold text-emerald-800"
+          >
+            Saved. These values will be used for calculation.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -322,12 +322,12 @@ function UploadPage() {
             </div>
             <div className="flex-1">
               <h2 id="income-heading" className="text-lg font-semibold">
-                Add income document
+                {hasAnyIncome ? "Add another income document?" : "Add income document"}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {hasAnyIncome
-                  ? "Add another if you have one, or continue."
-                  : "Choose one you have:"}
+                  ? "Optional. Add another only if you have more than one source of income."
+                  : "Required. Choose one you have:"}
               </p>
             </div>
           </div>
@@ -335,6 +335,9 @@ function UploadPage() {
           <div className="mt-5 flex flex-col gap-2">
             {INCOME_TYPES.map((t) => {
               const already = addedIncomeTypes.has(t);
+              const label = hasAnyIncome
+                ? `Add another ${DOC_LABELS[t]}`
+                : `Add ${DOC_LABELS[t]}`;
               return (
                 <button
                   key={t}
@@ -344,9 +347,9 @@ function UploadPage() {
                     setPhase("income-upload");
                   }}
                   className="inline-flex h-12 w-full items-center justify-between gap-2 rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  aria-label={`Add ${DOC_LABELS[t]}${already ? " (already added — add another)" : ""}`}
+                  aria-label={label}
                 >
-                  <span>{DOC_LABELS[t]}</span>
+                  <span>{label}</span>
                   {already && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                       <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -356,13 +359,18 @@ function UploadPage() {
                 </button>
               );
             })}
-            {!hasAnyIncome && (
+            {hasAnyIncome && (
               <button
                 type="button"
-                onClick={skipAllIncome}
-                className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={() => {
+                  setAnnouncement(
+                    `Done uploading. ${uploadedCount} document${uploadedCount === 1 ? "" : "s"} added. Going to review.`,
+                  );
+                  navigate({ to: "/review" });
+                }}
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                I do not have one
+                No more income sources — continue to review
               </button>
             )}
             <button

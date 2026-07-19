@@ -283,7 +283,7 @@ function CanonicalIncomeSourceEditor({
       ["netPay", "net_pay"],
     ];
     for (const [key, validationKey] of fields) {
-      const value = draft[key];
+      const value = draft[key] as string | undefined;
       if (!value) continue;
       const validation = validateNumericField(validationKey, value);
       if (!validation.ok) {

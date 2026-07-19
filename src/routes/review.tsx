@@ -565,6 +565,7 @@ function CanonicalIncomeSourceEditor({
     }
     setError("");
     onSave({ ...draft, confirmed: true });
+    setSavedAt(Date.now());
   }
 
   return (

@@ -25,7 +25,20 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-4 pt-2">
+          <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-primary/80">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="font-display text-[13px] tracking-tight text-primary">RentSmooth</span>
+          </div>
+          <div
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+            aria-label="Private session — your data stays on this device and is cleared when you close this tab"
+          >
+            <Lock className="h-3 w-3" aria-hidden="true" />
+            <span>Private session · cleared on close</span>
+          </div>
+        </div>
         <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2 px-4 py-3">
           {!hideBack && (
             <button
@@ -40,11 +53,13 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
           )}
           <div className="flex-1 min-w-0">
             {step && (
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                 {step}
               </p>
             )}
-            <h1 className="truncate text-base font-semibold">{title}</h1>
+            <h1 className="truncate font-display text-xl font-semibold tracking-tight text-foreground">
+              {title}
+            </h1>
           </div>
           <button
             type="button"
@@ -70,6 +85,16 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
       <main id="main" className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
         {children}
       </main>
+
+      <footer className="border-t border-border/70 bg-parchment/60">
+        <div className="mx-auto flex max-w-2xl flex-col gap-1 px-4 py-4 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            RentSmooth never approves or denies applications — every value stays under your control.
+          </p>
+          <p>WCAG 2.2 AA · No hidden proxies · Ephemeral processing</p>
+        </div>
+      </footer>
 
       <button
         type="button"

@@ -496,7 +496,7 @@ function PacketPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "rentsmooth-packet.json";
+    a.download = "simplepath-packet.json";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -547,7 +547,7 @@ function PacketPage() {
     setText(INK);
     doc.setFont("times", "bold");
     doc.setFontSize(9);
-    doc.text("RENTSMOOTH", M, 54, { charSpace: 2 });
+    doc.text("SIMPLEPATH", M, 54, { charSpace: 2 });
     doc.setFont("times", "normal");
     doc.setFontSize(9);
     doc.text(genLabel, pageW - M, 54, { align: "right" });
@@ -987,7 +987,7 @@ function PacketPage() {
 
   function downloadPdf() {
     const pdf = buildPdf();
-    pdf.save("rentsmooth-packet.pdf");
+    pdf.save("simplepath-packet.pdf");
     recordAudit("packet_export", { route: "/packet", status: "pdf" });
     finalizePacket({ status: "pdf" });
     setAnnouncement("PDF packet downloaded to your device.");

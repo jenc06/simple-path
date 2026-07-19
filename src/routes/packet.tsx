@@ -15,7 +15,7 @@ import {
 
 export const Route = createFileRoute("/packet")({
   head: () => ({
-    meta: [{ title: "Your packet — Income Check" }],
+    meta: [{ title: "Your packet — RentSmooth" }],
   }),
   component: PacketPage,
 });
@@ -96,7 +96,7 @@ function PacketPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "income-check-packet.json";
+    a.download = "rentsmooth-packet.json";
     document.body.appendChild(a);
     a.click();
     a.remove();

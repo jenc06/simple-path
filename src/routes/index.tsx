@@ -19,7 +19,7 @@ function Home() {
           <span>Private. Session only. Never used to train AI.</span>
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-          Income Check
+          RentSmooth
         </h1>
         <p className="mt-3 text-base text-muted-foreground">
           A calm, step-by-step review of the income documents you upload. You confirm every

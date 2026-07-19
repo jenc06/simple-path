@@ -12,7 +12,7 @@ import {
 
 export const Route = createFileRoute("/calculation")({
   head: () => ({
-    meta: [{ title: "Calculation — Income Check" }],
+    meta: [{ title: "Calculation — RentSmooth" }],
   }),
   component: CalculationPage,
 });

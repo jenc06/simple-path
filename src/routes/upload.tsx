@@ -13,7 +13,7 @@ import {
 export const Route = createFileRoute("/upload")({
   head: () => ({
     meta: [
-      { title: "Upload documents — Income Check" },
+      { title: "Upload documents — RentSmooth" },
       {
         name: "description",
         content: "Add your income documents. You review everything before it's used.",

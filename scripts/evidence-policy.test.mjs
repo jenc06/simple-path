@@ -6,6 +6,7 @@ import test from "node:test";
 const sourcePath = resolve("src/lib/reference-evidence.server.ts");
 const source = readFileSync(sourcePath, "utf8");
 const packetSource = readFileSync(resolve("src/routes/packet.tsx"), "utf8");
+const docPreviewSource = readFileSync(resolve("src/components/doc-preview.tsx"), "utf8");
 
 test("Tavily integration is extract-only and HUD allowlisted", () => {
   assert.match(source, /api\.tavily\.com\/extract/);
@@ -55,6 +56,8 @@ test("packet export includes source check results and warnings", () => {
   assert.match(packetSource, /verificationSummary/);
   assert.match(packetSource, /Source check warnings/);
   assert.match(packetSource, /Mark reviewed/);
+  assert.match(packetSource, /Source checks compare each packet claim with its cited evidence/);
+  assert.match(packetSource, /calculated means the value came from the app's calculation script/);
 });
 
 test("packet preview embeds the generated PDF blob directly", () => {
@@ -98,4 +101,12 @@ test("packet identifies missing or expired items without blocking export", () =>
   assert.match(packetSource, /expired_items: reviewerHandoff\.expiredItems/);
   assert.match(packetSource, /Export packet \(PDF\)/);
   assert.match(packetSource, /Export packet \(JSON\)/);
+});
+
+test("document source boxes use a clear amber highlight", () => {
+  assert.match(docPreviewSource, /field\.category === "untrusted"/);
+  assert.match(docPreviewSource, /border-amber-600/);
+  assert.doesNotMatch(docPreviewSource, /border-sky-600/);
+  assert.doesNotMatch(docPreviewSource, /bg-sky-300/);
+  assert.match(docPreviewSource, /Suspicious instruction found here/);
 });

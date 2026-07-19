@@ -92,7 +92,7 @@ test("duplicate income reviews show why counted once timeline", () => {
   assert.match(sessionStore, /export function buildIncomeSourceTimeline/);
   assert.match(sessionStore, /Pay stubs are repeated evidence/);
   assert.match(sessionStore, /Counted once/);
-  assert.match(timelineComponent, /Why Counted Once/);
+  assert.match(timelineComponent, /Why counted once/i);
   assert.match(reviewRoute, /<IncomeSourceTimeline session=\{session\} review=\{review\}/);
   assert.match(confirmRoute, /<IncomeSourceTimeline session=\{session\} review=\{review\}/);
 });

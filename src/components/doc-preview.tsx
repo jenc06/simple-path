@@ -11,6 +11,8 @@ export function DocPreview({ field }: { field: ExtractedField }) {
   const [zoom, setZoom] = useState(1);
   const box = visibleBox(field.bbox);
   const zoomPct = Math.round(zoom * 100);
+  const isUntrusted = field.category === "untrusted";
+  const highlightClass = "border-amber-600 bg-amber-300/20 shadow-[0_0_0_3px_rgba(217,119,6,0.22)]";
 
   return (
     <figure
@@ -70,7 +72,7 @@ export function DocPreview({ field }: { field: ExtractedField }) {
           )}
           {field.previewImage && (
             <div
-              className="absolute rounded-[3px] border-2 border-sky-600 bg-sky-300/15 shadow-[0_0_0_3px_rgba(2,132,199,0.18)]"
+              className={`absolute rounded-[3px] border-2 ${highlightClass}`}
               style={{
                 left: `${box.x}%`,
                 top: `${box.y}%`,
@@ -83,8 +85,18 @@ export function DocPreview({ field }: { field: ExtractedField }) {
         </div>
       </div>
       {field.previewImage && (
-        <figcaption className="border-t bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
-          {field.label} found here: <span className="text-foreground">{field.value}</span>
+        <figcaption
+          className={
+            "border-t px-3 py-2 text-xs font-medium " +
+            (isUntrusted
+              ? "border-amber-200 bg-amber-50 text-amber-950"
+              : "bg-background text-muted-foreground")
+          }
+        >
+          {isUntrusted ? "Suspicious instruction found here" : `${field.label} found here`}:{" "}
+          <span className={isUntrusted ? "font-semibold text-amber-950" : "text-foreground"}>
+            {field.value}
+          </span>
         </figcaption>
       )}
     </figure>

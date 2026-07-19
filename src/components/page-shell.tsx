@@ -1,5 +1,5 @@
 import { useRouter } from "@tanstack/react-router";
-import { ArrowLeft, Lock, MessageCircle, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
+import { ArrowLeft, MessageCircle, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
   classifyChatRequest,
@@ -41,13 +41,6 @@ export function PageShell({ title, step, children, hideBack, wide }: PageShellPr
           <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-primary/80">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
             <span className="font-display text-[13px] tracking-tight text-primary">SimplePath</span>
-          </div>
-          <div
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-            aria-label="Private session — local browser session storage only, cleared when you delete or close this tab"
-          >
-            <Lock className="h-3 w-3" aria-hidden="true" />
-            <span>Private session · local only</span>
           </div>
         </div>
         <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2 px-4 py-3">

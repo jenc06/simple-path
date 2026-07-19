@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Info, Lock, ShieldCheck } from "lucide-react";
+import { ArrowRight, Info, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/")({
@@ -40,10 +40,7 @@ function Home() {
         Skip to main content
       </a>
 
-      <main
-        id="main"
-        className="mx-auto w-full max-w-6xl px-6 py-16 md:px-12 md:py-24"
-      >
+      <main id="main" className="mx-auto w-full max-w-6xl px-6 py-16 md:px-12 md:py-24">
         <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-24 items-start">
           {/* Left rail — identity + context (sticky on desktop) */}
           <section
@@ -64,21 +61,9 @@ function Home() {
 
             <div className="space-y-6 max-w-md">
               <p className="text-lg leading-relaxed text-[color:var(--muted-foreground)]">
-                A private, non-decisioning walkthrough for reviewing the income documents
-                you upload. You confirm every value. This tool never approves, denies,
-                or scores anything.
-              </p>
-
-              <p
-                className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
-                aria-label="Session is private, stored only on this device, never used to train AI"
-              >
-                <span
-                  aria-hidden="true"
-                  className="inline-block h-2 w-2 rounded-full bg-[color:var(--ring)]"
-                />
-                <Lock className="h-3 w-3" aria-hidden="true" />
-                <span>Private session · never used to train AI</span>
+                A private, non-decisioning walkthrough for reviewing the income documents you
+                upload. You confirm every value. This tool never approves, denies, or scores
+                anything.
               </p>
             </div>
 
@@ -116,9 +101,7 @@ function Home() {
                       <span className="sr-only">Step {step.n}. </span>
                       {step.title}
                     </h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {step.body}
-                    </p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{step.body}</p>
                   </div>
                 </li>
               ))}
@@ -158,24 +141,18 @@ function Home() {
 
         <div className="mt-24 grid grid-cols-1 gap-6 border-t border-border pt-8 text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:grid-cols-3">
           <div>
-            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">
-              Privacy
-            </div>
+            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">Privacy</div>
             <div className="font-medium text-foreground">
               <ShieldCheck className="mr-1 inline h-3 w-3" aria-hidden="true" />
               Non-decisioning
             </div>
           </div>
           <div>
-            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">
-              Storage
-            </div>
+            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">Storage</div>
             <div className="font-medium text-foreground">Local session only</div>
           </div>
           <div>
-            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">
-              Accessibility
-            </div>
+            <div className="mb-1 font-mono text-[10px] text-muted-foreground/70">Accessibility</div>
             <div className="font-medium text-foreground">WCAG 2.2 AA</div>
           </div>
         </div>
@@ -194,20 +171,18 @@ function Home() {
             </h2>
             <div className="mt-4 space-y-3 text-sm text-muted-foreground">
               <p>
-                <strong className="text-foreground">We do not decide anything.</strong>{" "}
-                Values are extracted so you can confirm them. Approval or denial rests only on
-                the published rule and the numbers you confirm.
+                <strong className="text-foreground">We do not decide anything.</strong> Values are
+                extracted so you can confirm them. Approval or denial rests only on the published
+                rule and the numbers you confirm.
               </p>
               <p>
-                <strong className="text-foreground">
-                  We do not infer protected traits.
-                </strong>{" "}
-                No demographic, behavioral, or landlord-revenue features are used.
+                <strong className="text-foreground">We do not infer protected traits.</strong> No
+                demographic, behavioral, or landlord-revenue features are used.
               </p>
               <p>
-                <strong className="text-foreground">Your data stays yours.</strong>{" "}
-                Processing is ephemeral, local persistence is scoped to this browser session,
-                documents are never used to train AI, and you can delete this session at any time.
+                <strong className="text-foreground">Your data stays yours.</strong> Processing is
+                ephemeral, local persistence is scoped to this browser session, documents are never
+                used to train AI, and you can delete this session at any time.
               </p>
             </div>
             <button

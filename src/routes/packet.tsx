@@ -1084,9 +1084,6 @@ function PacketPage() {
     setAnnouncement("Source details are ready to review.");
   }
 
-
-
-
   return (
     <PageShell title="Your packet" step="Ready to share">
       <LiveRegion message={announcement} />
@@ -1407,6 +1404,11 @@ function PacketPage() {
             v={`${boundedEvidence.length} total: ${uploadedEvidence.length} uploaded-document, ${referenceEvidence.chunks.length} HUD reference`}
           />
           <Row k="Source checks" v={sourceCheckSummary} />
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950">
+            Source checks compare each packet claim with its cited evidence. Matched means the cited
+            chunk clearly contains the value, needs review means a human should check the source,
+            and calculated means the value came from the app's calculation script.
+          </div>
         </dl>
       </Section>
 
@@ -1428,8 +1430,6 @@ function PacketPage() {
             <FileText className="h-4 w-4" aria-hidden="true" />
             Export packet (JSON)
           </button>
-
-
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Export timestamp: {new Date().toISOString()}
@@ -1454,9 +1454,8 @@ function PacketPage() {
 
       <Section title="Finish and clear your data">
         <p className="text-sm text-muted-foreground">
-          Download or export your packet first. When you're finished, use the button below to
-          erase this session and all associated information from this browser. This cannot be
-          undone.
+          Download or export your packet first. When you're finished, use the button below to erase
+          this session and all associated information from this browser. This cannot be undone.
         </p>
         <button
           type="button"

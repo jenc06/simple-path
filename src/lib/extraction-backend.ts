@@ -128,17 +128,42 @@ export async function extractDocumentFields({
   };
 }
 
-async function scanViaServer(_file: File, _selectedDocType: DocType): Promise<ScanResult | null> {
-  return null;
+async function scanViaServer(file: File, selectedDocType: DocType): Promise<ScanResult | null> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("selectedDocType", selectedDocType);
+  const response = await fetch("/api/scan", {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) return null;
+  return (await response.json()) as ScanResult;
 }
 
-async function extractViaServer(_args: {
+async function extractViaServer(args: {
   finalDocType: DocType;
   docId: string;
   file: File;
   scan: ScanResult;
 }): Promise<ExtractionResult | null> {
-  return null;
+  const form = new FormData();
+  form.append("file", args.file);
+  form.append("finalDocType", args.finalDocType);
+  form.append("docId", args.docId);
+  form.append("scan", JSON.stringify(args.scan));
+  const response = await fetch("/api/extract", {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) return null;
+  const result = (await response.json()) as ExtractionResult;
+  return {
+    ...result,
+    fields: validateExtractedFields(args.finalDocType, result.fields ?? []),
+    evidenceChunks: validateEvidenceChunks(result.evidenceChunks ?? []),
+    previewPages: normalizePreviewPages(result.previewPages),
+    warnings: Array.isArray(result.warnings) ? result.warnings.map(String) : [],
+  };
 }
 
 function normalizePreviewPages(

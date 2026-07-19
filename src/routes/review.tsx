@@ -275,9 +275,13 @@ function ReviewPage() {
 
           {orderedBasic.length > 0 && (
             <section aria-labelledby="section-basic">
-              <h2 ref={basicHeader} id="section-basic" className="mb-3 text-lg font-semibold">
+              <h2 ref={basicHeader} id="section-basic" className="mb-1 text-lg font-semibold">
                 Basic values
               </h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Applicant identity and household details. Confirm each value or edit it — the
+                highlighted box on the left shows where it was found.
+              </p>
               <div className="space-y-2.5">
                 {orderedBasic.map((m) => {
                   const key = mkKey(m);

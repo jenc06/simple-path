@@ -710,7 +710,7 @@ function ChoiceButton({
       type="button"
       onClick={onClick}
       className={
-        "inline-flex h-11 items-center justify-center rounded-md border px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
+        "inline-flex min-h-[3.25rem] items-center justify-center rounded-md border px-4 py-3 text-center text-sm font-semibold leading-snug text-balance focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
         (active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-input bg-background hover:bg-accent")

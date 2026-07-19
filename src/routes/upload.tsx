@@ -214,9 +214,12 @@ function UploadPage() {
             {alreadyDone.has(currentType) && (
               <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                 <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                Already added — you can replace it.
+                Already added — you can add more or replace it.
               </p>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              You can select more than one file at a time.
+            </p>
           </div>
         </div>
 
@@ -225,6 +228,7 @@ function UploadPage() {
             ref={fileInputRef}
             type="file"
             accept="application/pdf,image/*"
+            multiple
             className="sr-only"
             onChange={handleFileChosen}
             aria-hidden="true"

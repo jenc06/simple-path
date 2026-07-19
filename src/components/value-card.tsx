@@ -34,6 +34,7 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
   const initial = field.corrected ?? field.value;
   const [draft, setDraft] = useState(initial);
   const [error, setError] = useState("");
+  const [reopen, setReopen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const tier = confidenceTier(field.confidence);
   const edited = draft.trim() !== field.value;
@@ -50,7 +51,6 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
       return;
     }
     setError("");
-    // Only pass corrected if it actually differs from the found value.
     confirmField(field.id, next === field.value ? undefined : next);
     onConfirmed();
   }
@@ -61,7 +61,6 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
     inputRef.current?.focus();
   }
 
-  // Confirmed collapsed state
   if (field.confirmed) {
     const shown = field.corrected ?? field.value;
     const wasCorrected = !!field.corrected && field.corrected !== field.value;
@@ -94,17 +93,8 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                // Un-confirm by writing over with the same value via confirmField won't help;
-                // simplest: navigate active state; user can edit again on next render by
-                // toggling via prop. We'll toggle via a shallow event to parent.
                 onActivate();
-                // Fire a custom edit signal by using confirmField with corrected undefined
-                // is not appropriate; instead reset local draft and rely on parent re-render.
-                // We'll unmount edit-mode by calling confirmField with same value... skip.
-                // Instead: dispatch a re-edit by mutating store: mark confirmed=false via
-                // the store's confirmField isn't reversible. Fall back to prompting user
-                // through the input below by using a temp local flag:
-                setLocalReopen(true);
+                setReopen(true);
               }}
               className="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-input px-2.5 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={`Edit ${field.label} (currently ${shown})`}
@@ -117,10 +107,10 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
         <p className="mt-3 text-xs text-muted-foreground">
           Source: {DOC_LABELS[field.sourceDoc]}, page {field.sourcePage} · Location: highlighted box
         </p>
-        {localReopen && (
+        {reopen && (
           <ReopenEditor
             field={field}
-            onDone={() => setLocalReopen(false)}
+            onDone={() => setReopen(false)}
             onConfirmed={onConfirmed}
           />
         )}
@@ -217,18 +207,8 @@ export function ValueCard({ field, isActive, onActivate, onConfirmed }: Props) {
       </div>
     </article>
   );
-
-  // ---- helpers below use closures ----
-  function setLocalReopen(_v: boolean) {
-    // placeholder replaced by useState hook below; see wrapper
-  }
 }
 
-/**
- * Small wrapper input that lets a confirmed card be edited again in place.
- * We can't un-confirm in the store, so this just lets the user submit a new
- * corrected value via confirmField again.
- */
 function ReopenEditor({
   field,
   onDone,

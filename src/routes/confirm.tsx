@@ -30,46 +30,50 @@ function ConfirmPage() {
         used until you confirm here.
       </p>
 
-      <ul className="mt-5 space-y-2">
+      <ul className="mt-5 space-y-3">
         {fields.map((f) => {
           const isOpen = open === f.id;
-          const shown = f.corrected ?? f.value;
           return (
             <li key={f.id} className="rounded-xl border bg-card">
-              <button
-                type="button"
-                onClick={() => setOpen(isOpen ? null : f.id)}
-                aria-expanded={isOpen}
-                aria-controls={`panel-${f.id}`}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="flex flex-col gap-2 px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {f.label}
                   </span>
-                  <span className="mt-0.5 block text-lg font-semibold">{shown}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    From {DOC_LABELS[f.sourceDoc]}, page {f.sourcePage}
-                    {f.corrected ? " • You corrected this" : ""}
+                  <span
+                    className={
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium " +
+                      (f.confirmed
+                        ? "border-emerald-600/40 bg-emerald-50 text-emerald-800"
+                        : "border-amber-600/40 bg-amber-50 text-amber-900")
+                    }
+                  >
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                    {f.confirmed ? "Confirmed" : "Not confirmed"}
                   </span>
-                </span>
-                <span
-                  className={
-                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium " +
-                    (f.confirmed
-                      ? "border-emerald-600/40 bg-emerald-50 text-emerald-800"
-                      : "border-amber-600/40 bg-amber-50 text-amber-900")
+                </div>
+                <EditableValue
+                  field={f}
+                  size="lg"
+                  onSaved={(v) =>
+                    setAnnouncement(`${f.label} updated to ${v}. Calculations will use this value.`)
                   }
+                />
+                <button
+                  type="button"
+                  onClick={() => setOpen(isOpen ? null : f.id)}
+                  aria-expanded={isOpen}
+                  aria-controls={`panel-${f.id}`}
+                  className="mt-1 inline-flex w-fit items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Check className="h-3 w-3" aria-hidden="true" />
-                  {f.confirmed ? "Confirmed" : "Not confirmed"}
-                </span>
-                {isOpen ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                )}
-              </button>
+                  {isOpen ? (
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {isOpen ? "Hide source" : "Show source"} — {DOC_LABELS[f.sourceDoc]}, page {f.sourcePage}
+                </button>
+              </div>
               {isOpen && (
                 <div id={`panel-${f.id}`} className="border-t px-4 py-4">
                   <DocPreview field={f} />
@@ -79,6 +83,7 @@ function ConfirmPage() {
           );
         })}
       </ul>
+
 
       <div className="mt-8 flex flex-col gap-2">
         <button

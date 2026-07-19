@@ -1471,7 +1471,7 @@ function PacketPage() {
               setPreviewUrl(null);
             }
             setPreview(false);
-            recordAudit("session_delete_from_packet", { route: "/packet", status: "deleted" });
+            recordAudit("session_delete", { route: "/packet", status: "deleted" });
             deleteSession();
             setAnnouncement("Session and all associated information deleted.");
             navigate({ to: "/" });

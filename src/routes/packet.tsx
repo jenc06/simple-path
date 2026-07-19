@@ -292,12 +292,13 @@ function PacketPage() {
         </button>
         <button
           type="button"
-          onClick={download}
+          onClick={downloadPdf}
           className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
-          Download
+          Download PDF
         </button>
+
       </div>
 
       <Section title="Renter information">

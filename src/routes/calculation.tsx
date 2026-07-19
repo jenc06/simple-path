@@ -99,10 +99,26 @@ function CalculationPage() {
             <p className="mt-1 text-4xl font-bold tracking-tight">{currency(result.annual)}</p>
 
             <dl className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div>
+              <div className="sm:col-span-2">
                 <dt className="text-muted-foreground">Confirmed income</dt>
-                <dd className="font-semibold">{currency(result.amount)}</dd>
+                <dd className="mt-1">
+                  {payField ? (
+                    <EditableValue
+                      field={payField}
+                      size="md"
+                      ariaLabel="Pay before taxes"
+                      onSaved={(v) =>
+                        setAnnouncement(
+                          `Pay before taxes updated to ${v}. Annualized income recalculated.`,
+                        )
+                      }
+                    />
+                  ) : (
+                    <span className="font-semibold">{currency(result.amount)}</span>
+                  )}
+                </dd>
               </div>
+
               <div>
                 <dt className="text-muted-foreground">Frequency</dt>
                 <dd className="font-semibold">{freqLabel[session.frequency]}</dd>

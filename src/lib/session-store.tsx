@@ -17,6 +17,8 @@ export const DOC_LABELS: Record<DocType, string> = {
 
 export type DocStatus = "uploaded" | "skipped" | "expired";
 
+export type FieldCategory = "basic" | "calculation" | "untrusted";
+
 export interface ExtractedField {
   id: string;
   label: string;
@@ -27,7 +29,9 @@ export interface ExtractedField {
   bbox: { x: number; y: number; w: number; h: number }; // % of page
   confirmed: boolean;
   corrected?: string;
+  category?: FieldCategory;
 }
+
 
 export interface UploadedDoc {
   id: string;

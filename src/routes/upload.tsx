@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, Check, FileText, Upload } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import {
   DATE_CUTOFF,
@@ -41,6 +41,7 @@ function UploadPage() {
     date: string;
   }>(null);
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentType = STEPS[stepIdx];
   const alreadyDone = useMemo(
@@ -70,11 +71,27 @@ function UploadPage() {
     }));
   }
 
-  function simulateUpload() {
-    // Simulate a file with a document date. Alternate to demo the cutoff logic.
-    const dates = ["2026-06-30", "2026-04-15", "2026-05-20"];
-    const date = dates[stepIdx % dates.length];
-    const fileName = `${currentType}_${date}.pdf`;
+  function openFilePicker() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset so choosing the same file again still fires change.
+    e.target.value = "";
+    if (!file) return;
+
+    const MAX_BYTES = 20 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      setAnnouncement(
+        `That file is larger than 20 MB. Please choose a smaller file.`,
+      );
+      return;
+    }
+
+    const fileName = file.name;
+    const date = new Date(file.lastModified).toISOString().slice(0, 10);
+
     if (date < DATE_CUTOFF) {
       setOldDatePending({ docType: currentType, fileName, date });
       setAnnouncement(
@@ -83,7 +100,9 @@ function UploadPage() {
       return;
     }
     addDoc(currentType, fileName, date, "uploaded");
-    setAnnouncement(`${DOC_LABELS[currentType]} uploaded. Moved to next document.`);
+    setAnnouncement(
+      `${DOC_LABELS[currentType]} uploaded: ${fileName}. Moved to next document.`,
+    );
     next();
   }
 
@@ -164,9 +183,18 @@ function UploadPage() {
         </div>
 
         <div className="mt-5 flex flex-col gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,image/*"
+            className="sr-only"
+            onChange={handleFileChosen}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
           <button
             type="button"
-            onClick={simulateUpload}
+            onClick={openFilePicker}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={`Upload a file for ${DOC_LABELS[currentType]}`}
           >

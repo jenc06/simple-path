@@ -183,9 +183,18 @@ function UploadPage() {
         </div>
 
         <div className="mt-5 flex flex-col gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,image/*"
+            className="sr-only"
+            onChange={handleFileChosen}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
           <button
             type="button"
-            onClick={simulateUpload}
+            onClick={openFilePicker}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={`Upload a file for ${DOC_LABELS[currentType]}`}
           >

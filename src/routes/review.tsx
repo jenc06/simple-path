@@ -139,8 +139,14 @@ function ReviewPage() {
     );
   }
 
-  const previewField: ExtractedField | undefined =
-    activeMerged && activeSource
+  const activeUntrusted: ExtractedField | undefined =
+    activeKey?.startsWith("untrusted::")
+      ? untrusted.find((f) => `untrusted::${f.id}` === activeKey)
+      : undefined;
+
+  const previewField: ExtractedField | undefined = activeUntrusted
+    ? activeUntrusted
+    : activeMerged && activeSource
       ? {
           id: activeSource.fieldId,
           key: activeMerged.key,

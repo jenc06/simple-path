@@ -377,7 +377,9 @@ function PacketPage() {
           </p>
         ) : (
           <dl className="space-y-1.5 text-sm">
-            <Row k="Formula" v={`${currency(amount)} × ${mult} = ${currency(annual)}`} />
+            {income.contributions.map((c, i) => (
+              <Row key={i} k={c.label} v={`${c.formula} = ${currency(c.amount)} / year`} />
+            ))}
             <Row k="Annualized income" v={currency(annual)} />
             <Row k="Threshold" v={currency(THRESHOLD.amount)} />
             <Row

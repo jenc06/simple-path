@@ -79,8 +79,11 @@ function PacketPage() {
       url: THRESHOLD.url,
     },
     calculation: {
-      confirmedIncome: Number.isNaN(amount) ? null : amount,
-      multiplier: mult,
+      contributions: income.contributions.map((c) => ({
+        label: c.label,
+        formula: c.formula,
+        amount: c.amount,
+      })),
       annualizedIncome: Number.isNaN(annual) ? null : annual,
       comparison: Number.isNaN(annual)
         ? "unavailable"

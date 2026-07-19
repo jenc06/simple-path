@@ -709,35 +709,39 @@ function UploadPage() {
       )}
 
       <div className="mt-8 flex flex-col gap-2">
-        <button
-          type="button"
-          disabled={!canFinish}
-          onClick={() => {
-            setAnnouncement(
-              `Done uploading. ${uploadedCount} document${uploadedCount === 1 ? "" : "s"} added. Going to review.`,
-            );
-            navigate({ to: "/review" });
-          }}
-          className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={
-            canFinish
-              ? "I'm done uploading. Go to review."
-              : "Not allowed. At least one income document is required to continue."
-          }
-          aria-describedby={!canFinish ? "upload-not-allowed" : undefined}
-        >
-          {canFinish ? "I'm done uploading!" : "Not allowed - add an income document"}
-        </button>
-        {!canFinish && (
-          <p id="upload-not-allowed" className="text-xs font-medium text-amber-800">
-            Not allowed yet: at least one income document is required to continue.
-          </p>
+        {canFinish ? (
+          <button
+            type="button"
+            onClick={() => {
+              setAnnouncement(
+                `Done uploading. ${uploadedCount} document${uploadedCount === 1 ? "" : "s"} added. Going to review.`,
+              );
+              navigate({ to: "/review" });
+            }}
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Continue to review your extracted values."
+          >
+            Continue to review
+          </button>
+        ) : (
+          <div
+            role="status"
+            className="rounded-xl border border-amber-500/60 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            <p className="font-semibold">Not allowed to continue yet</p>
+            <p className="mt-1">{notAllowedReason}</p>
+            <ul className="mt-2 list-disc pl-5 text-xs">
+              {!hasApplication && <li>Application form is required.</li>}
+              {!hasAnyIncome && <li>At least one income document is required.</li>}
+            </ul>
+          </div>
         )}
         <p className="text-xs text-muted-foreground">
           Cutoff for document age: <strong>{DATE_CUTOFF}</strong> ({DOCUMENT_AGE_LIMIT_DAYS} days
           before {TODAY}). If a file is older, we'll ask before using it.
         </p>
       </div>
+
 
       {mismatchPending && (
         <div

@@ -230,7 +230,9 @@ function PacketPage() {
         bold: true,
       });
     } else {
-      kv("Formula", `${currency(amount)} × ${mult} = ${currency(annual)}`);
+      income.contributions.forEach((c) => {
+        line(`• ${c.label}: ${c.formula} = ${currency(c.amount)} / year`);
+      });
       kv("Annualized income", currency(annual));
       kv("Threshold", currency(THRESHOLD.amount));
       kv(

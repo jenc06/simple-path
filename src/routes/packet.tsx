@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
@@ -32,7 +32,7 @@ import {
 
 export const Route = createFileRoute("/packet")({
   head: () => ({
-    meta: [{ title: "Your packet — RentSmooth" }],
+    meta: [{ title: "Your packet — SimplePath" }],
   }),
   component: PacketPage,
 });
@@ -144,12 +144,13 @@ function buildReviewerHandoff({
     missingItems,
     expiredItems,
     openItems,
-    decisionBoundary: "Factual comparison only; RentSmooth does not approve or deny eligibility.",
+    decisionBoundary: "Factual comparison only; SimplePath does not approve or deny eligibility.",
   };
 }
 
 function PacketPage() {
-  const { session, setSession, recordAudit, finalizePacket } = useSession();
+  const { session, recordAudit, finalizePacket, deleteSession } = useSession();
+  const navigate = useNavigate();
   const [showJson, setShowJson] = useState(false);
   const [preview, setPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -496,7 +497,7 @@ function PacketPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "rentsmooth-packet.json";
+    a.download = "simplepath-packet.json";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -547,7 +548,7 @@ function PacketPage() {
     setText(INK);
     doc.setFont("times", "bold");
     doc.setFontSize(9);
-    doc.text("RENTSMOOTH", M, 54, { charSpace: 2 });
+    doc.text("SIMPLEPATH", M, 54, { charSpace: 2 });
     doc.setFont("times", "normal");
     doc.setFontSize(9);
     doc.text(genLabel, pageW - M, 54, { align: "right" });
@@ -581,7 +582,7 @@ function PacketPage() {
       doc.setFont("times", "normal");
       doc.setFontSize(8);
       doc.text(
-        "RentSmooth organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
+        "SimplePath organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
         M,
         pageH - footerH + 14,
         { maxWidth: contentW - 120 },
@@ -972,7 +973,7 @@ function PacketPage() {
 
     sectionHeader("How this packet was produced");
     body(
-      "RentSmooth extracts values from renter-provided documents. The renter reviewed and confirmed every value used in the calculation above. RentSmooth performs a factual comparison against the referenced HUD threshold; it does not decide, approve, or deny eligibility. No demographic data is collected or inferred. Document contents are processed ephemerally and cleared when the session ends.",
+      "SimplePath extracts values from renter-provided documents. The renter reviewed and confirmed every value used in the calculation above. SimplePath performs a factual comparison against the referenced HUD threshold; it does not decide, approve, or deny eligibility. No demographic data is collected or inferred. Document contents are processed ephemerally and cleared when the session ends.",
       { size: 9, muted: true },
     );
 
@@ -987,7 +988,7 @@ function PacketPage() {
 
   function downloadPdf() {
     const pdf = buildPdf();
-    pdf.save("rentsmooth-packet.pdf");
+    pdf.save("simplepath-packet.pdf");
     recordAudit("packet_export", { route: "/packet", status: "pdf" });
     finalizePacket({ status: "pdf" });
     setAnnouncement("PDF packet downloaded to your device.");
@@ -1075,21 +1076,8 @@ function PacketPage() {
     setAnnouncement("Source details are ready to review.");
   }
 
-  function deletePacket() {
-    setSession((s) => ({
-      ...s,
-      docs: [],
-      incomeSourceReviews: [],
-      packetGeneratedAt: undefined,
-    }));
-    recordAudit("packet_delete", { route: "/packet", status: "deleted" });
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    setPreview(false);
-    setAnnouncement("Packet deleted. Your session is empty.");
-  }
+
+
 
   return (
     <PageShell title="Your packet" step="Ready to share">
@@ -1433,14 +1421,7 @@ function PacketPage() {
             Export packet (JSON)
           </button>
 
-          <button
-            type="button"
-            onClick={deletePacket}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-destructive/40 px-4 text-sm font-medium text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            Delete my packet
-          </button>
+
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Export timestamp: {new Date().toISOString()}
@@ -1461,6 +1442,32 @@ function PacketPage() {
             {JSON.stringify(jsonExport, null, 2)}
           </pre>
         )}
+      </Section>
+
+      <Section title="Finish and clear your data">
+        <p className="text-sm text-muted-foreground">
+          Download or export your packet first. When you're finished, use the button below to
+          erase this session and all associated information from this browser. This cannot be
+          undone.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (previewUrl) {
+              URL.revokeObjectURL(previewUrl);
+              setPreviewUrl(null);
+            }
+            setPreview(false);
+            recordAudit("session_delete", { route: "/packet", status: "deleted" });
+            deleteSession();
+            setAnnouncement("Session and all associated information deleted.");
+            navigate({ to: "/" });
+          }}
+          className="mt-3 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-destructive/40 px-4 text-sm font-semibold text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          Done — delete session and all associated information
+        </button>
       </Section>
 
       {preview && previewUrl && (

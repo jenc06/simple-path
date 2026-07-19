@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, Check } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 
@@ -13,7 +13,7 @@ import { fetchReferenceEvidence, frozenReferenceEvidence } from "@/lib/reference
 
 export const Route = createFileRoute("/calculation")({
   head: () => ({
-    meta: [{ title: "Calculation — RentSmooth" }],
+    meta: [{ title: "Calculation — SimplePath" }],
   }),
   component: CalculationPage,
 });
@@ -140,14 +140,8 @@ function CalculationPage() {
               Rule effective date: {threshold.effective}
             </p>
             <p
-              className={
-                "mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold " +
-                (belowOrEqual
-                  ? "border border-emerald-700/40 bg-emerald-50 text-emerald-900"
-                  : "border border-amber-700/40 bg-amber-50 text-amber-900")
-              }
+              className="mt-3 inline-flex items-center rounded-full border border-slate-700/40 bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900"
             >
-              <Check className="h-4 w-4" aria-hidden="true" />
               Result: your income is {belowOrEqual ? "below or equal to" : "above"} the threshold.
             </p>
             <p className="mt-3 text-xs text-muted-foreground">

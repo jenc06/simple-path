@@ -40,7 +40,7 @@ export function PageShell({ title, step, children, hideBack, wide }: PageShellPr
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-4 pt-2">
           <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-primary/80">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="font-display text-[13px] tracking-tight text-primary">RentSmooth</span>
+            <span className="font-display text-[13px] tracking-tight text-primary">SimplePath</span>
           </div>
           <div
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
@@ -104,7 +104,7 @@ export function PageShell({ title, step, children, hideBack, wide }: PageShellPr
         <div className="mx-auto flex max-w-2xl flex-col gap-1 px-4 py-4 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            RentSmooth never approves or denies applications — every value stays under your control.
+            SimplePath never approves or denies applications — every value stays under your control.
           </p>
           <p>WCAG 2.2 AA · Local session storage · Ephemeral processing</p>
         </div>

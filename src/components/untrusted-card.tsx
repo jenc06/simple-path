@@ -38,7 +38,7 @@ export function UntrustedCard({
           {field.value}
         </p>
         <p className="mt-3 text-xs text-red-900/80">
-          RentSmooth never follows instructions written inside uploaded documents.
+          SimplePath never follows instructions written inside uploaded documents.
           Only your confirmed values are used for calculations.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">

@@ -26,7 +26,7 @@ import {
 export const Route = createFileRoute("/review")({
   head: () => ({
     meta: [
-      { title: "Review values — RentSmooth" },
+      { title: "Review values — SimplePath" },
       {
         name: "description",
         content:
@@ -275,9 +275,13 @@ function ReviewPage() {
 
           {orderedBasic.length > 0 && (
             <section aria-labelledby="section-basic">
-              <h2 ref={basicHeader} id="section-basic" className="mb-3 text-lg font-semibold">
+              <h2 ref={basicHeader} id="section-basic" className="mb-1 text-lg font-semibold">
                 Basic values
               </h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Applicant identity and household details. Confirm each value or edit it — the
+                highlighted box on the left shows where it was found.
+              </p>
               <div className="space-y-2.5">
                 {orderedBasic.map((m) => {
                   const key = mkKey(m);
@@ -310,9 +314,13 @@ function ReviewPage() {
 
           {orderedCalc.length > 0 && (
             <section aria-labelledby="section-calc">
-              <h2 ref={calcHeader} id="section-calc" className="mb-3 text-lg font-semibold">
+              <h2 ref={calcHeader} id="section-calc" className="mb-1 text-lg font-semibold">
                 Values used for calculation
               </h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Numbers that determine annual income. Confirm each one; changes update the totals
+                on the next page.
+              </p>
               <div className="space-y-2.5">
                 {orderedCalc.map((m) => {
                   const key = mkKey(m);
@@ -349,7 +357,7 @@ function ReviewPage() {
                 Safety check
               </h2>
               <p className="mb-3 text-sm text-muted-foreground">
-                Suspicious text is shown only for transparency. RentSmooth ignores it.
+                Suspicious text is shown only for transparency. SimplePath ignores it.
               </p>
               <div className="space-y-2.5">
                 {untrusted.map((f) => {
@@ -518,6 +526,7 @@ function CanonicalIncomeSourceEditor({
   const initial = review.canonical ?? details.suggested;
   const [draft, setDraft] = useState<CanonicalIncomeSourceValues>(initial);
   const [error, setError] = useState("");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
   function update(key: keyof CanonicalIncomeSourceValues, value: string) {
     const next = { ...draft, [key]: value };
@@ -533,6 +542,7 @@ function CanonicalIncomeSourceEditor({
       }
     }
     setError("");
+    setSavedAt(null);
     setDraft(next);
   }
 
@@ -545,7 +555,7 @@ function CanonicalIncomeSourceEditor({
       ["netPay", "net_pay"],
     ];
     for (const [key, validationKey] of fields) {
-      const value = draft[key];
+      const value = draft[key] as string | undefined;
       if (!value) continue;
       const validation = validateNumericField(validationKey, value);
       if (!validation.ok) {
@@ -555,6 +565,7 @@ function CanonicalIncomeSourceEditor({
     }
     setError("");
     onSave({ ...draft, confirmed: true });
+    setSavedAt(Date.now());
   }
 
   return (
@@ -621,7 +632,7 @@ function CanonicalIncomeSourceEditor({
           {error}
         </p>
       )}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={save}
@@ -634,11 +645,21 @@ function CanonicalIncomeSourceEditor({
           onClick={() => {
             setDraft(details.suggested);
             onSave(undefined);
+            setSavedAt(null);
           }}
           className="inline-flex h-10 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Revert to original/source value
         </button>
+        {savedAt !== null && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm font-semibold text-emerald-800"
+          >
+            Saved. These values will be used for calculation.
+          </p>
+        )}
       </div>
     </div>
   );

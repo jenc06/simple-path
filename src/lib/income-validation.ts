@@ -45,7 +45,7 @@ export function isNumericFieldKey(key: string): key is NumericFieldKey {
 export function validateNumericField(key: string, raw: string): NumericValidationResult {
   if (!isNumericFieldKey(key)) return { ok: true, normalized: raw };
   const rule = NUMERIC_RULES[key];
-  const parsed = parseStrictNumeric(raw, rule.money);
+  const parsed = parseStrictNumeric(raw, rule.money ?? false);
   if (parsed === null) {
     return { ok: false, error: `${rule.label} must be a number.` };
   }

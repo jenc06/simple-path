@@ -1,74 +1,40 @@
-## Overhaul Review, Confirm, and Calculation
+## Rename to SimplePath
+Replace every "RentSmooth" string with "SimplePath" across UI, metadata, PDF, chat system prompt, security guide, and page titles. Files: `src/routes/__root.tsx`, `src/routes/index.tsx`, `src/routes/upload.tsx`, `src/routes/review.tsx`, `src/routes/confirm.tsx`, `src/routes/calculation.tsx`, `src/routes/packet.tsx`, `src/components/page-shell.tsx`, `src/components/untrusted-card.tsx`, `src/lib/chat-workflow.ts`, `src/routes/api/chat.ts`, `src/content/app-security.md`. (Keep JSON export filename `simplepath-packet.json`.)
 
-### Review page — group by value, not by document
+## Upload page
+- **Require an application document too**: `canFinish` in `src/routes/upload.tsx` must also require a confirmed `application_form` upload, not just an income document. Update the disabled-state helper text and `aria-describedby` warning to name both requirements explicitly ("Not allowed — add an application form and an income document").
+- **Remove "I'm done uploading!" button entirely.** The user proceeds via the existing checklist "Continue to review" affordance. If that path only exists through the finish button, replace the button label/behavior with a plain link/button that navigates only when both requirements are met; when not met, do not render a proceed button at all and instead render a clear text block: "Not allowed yet — add an application form and one income document before continuing." (No disabled button.)
+- **Explicit "not allowed" wording**: Every place we currently gray-out a button or rely on the ⊘ icon must include the words "Not allowed" plus the reason.
+- **Ban icon tooltip/label**: any lucide `Ban`/circle-slash icon that appears on hover gets a visible text label next to it ("Not allowed") and an `aria-label`; no icon-only state.
+- **Section descriptions**: Add short (1–2 sentence) helper text under each step heading — Step 1 (Application form: what it is, which basic fields it fills), Step 2 (Income document: why one is required, what types count), "Added so far" (what deleting does).
 
-Rebuild `src/routes/review.tsx` so cards are grouped into two sections only:
+## Review page
+- Add short helper text under the page heading and under each of the two section headings ("Basic values", "Values used for calculation", "Safety check") describing what the user is doing in that section and how confirmation works.
+- **Save confirmation feedback for same-source values**: In `SameSourceEditor` (`src/routes/review.tsx` around line 539–630), after `save()` succeeds:
+  - Set a local `justSaved` boolean (auto-clear after ~3s).
+  - Show an inline confirmation row directly under the Save button: check-mark icon **plus the text "Saved."** and a timestamp ("Saved just now"). Not color-only.
+  - Also announce via `LiveRegion` ("Same income source values saved.") — already partly wired; ensure it fires on every save, not only first.
+- **Simplify "Why Counted Once"**: In `src/components/income-source-timeline.tsx`, collapse the per-source detail list behind a "Show sources" expandable (`<details>` or a controlled disclosure with a text-labeled toggle button "Show sources" / "Hide sources"). The default view shows only: the one-line explanation and the final counted amount. No overwhelming source-by-source dump until expanded.
 
-1. **Basic values** (name, household size, address, application date, letter dates, pay dates, frequency, etc.)
-2. **Values used for calculation** (gross pay, net pay, hourly rate, hours, monthly benefit, gross receipts, platform fees).
+## Calculation / final verdict
+- Remove the pass/warn/fail color system for the final comparison verdict. Render the comparison line ("Annualized income is below/at/above threshold") in a single neutral style — brand blue background/border, no green/red/amber, no check-mark, no ✕ icon. Just text.
+- Apply the same change to the PDF eligibility summary block in `src/routes/packet.tsx`: strip status color tokens and the check/cross glyph; use a single neutral rule and black text for the comparison line. (PDF is already black-and-white — just remove any remaining status indicator.)
 
-Merging logic (in a new helper in `src/lib/session-store.tsx`, `mergedFields(session)`):
-- Group all extracted fields across every uploaded doc by a normalized key (e.g. `person_name`, `hourly_rate`, `gross_pay`). Cross-doc keys like `person_name`/`hourly_rate` collapse into one card even if they came from two docs.
-- Each merged card carries an array of **sources** (docId, docType, page, bbox, value, confidence). The card's displayed value defaults to the highest-confidence source; user corrections still win.
-- Confirming a merged card confirms all underlying fields at once (new `confirmMerged(mergedId, corrected?)` action).
+## Packet page
+- **Remove "Delete my packet" button** (`src/routes/packet.tsx` ~line 1442).
+- **Add "Done — delete session and all associated information" button** at the bottom of the page. It calls the existing session-delete action (same one used by the header trash button) and, after clearing, routes to `/` with a `LiveRegion` announcement ("Session and all information deleted."). Full-width, primary style, with explicit text (no icon-only).
+- Add a short description above the new button explaining exactly what it clears (uploads, extracted values, edits, packet) and that it is irreversible.
 
-Card behavior (updated `src/components/value-card.tsx`):
-- Larger card (min height ~ viewport - sticky preview) so **only one unconfirmed card is visible at a time**; the next one appears via scroll or auto-scroll on confirm.
-- If a merged card has >1 source, show a small **source toggle** row at the top (chips: "Pay stub p.1", "Employment letter p.1"). Clicking a chip switches the sticky preview's yellow box to that source. Every source is announced in text, not color.
-- **Warning ribbon** when the field's source document date (or the field value itself, if it's a date) is more than 6 months before `TODAY` (2026-07-18, cutoff 2026-01-18): amber banner with text "Older than 6 months — double-check this is current." Not color-only; icon + text.
-- Once confirmed, the card **moves to the bottom** of its section (sort: unconfirmed first by original order, confirmed last). The next unconfirmed card in the same section becomes active automatically.
-- When the **last card in a section** is confirmed, smooth-scroll to the first unconfirmed card in the next section and announce "Basic values complete. Moving to values used for calculation."
+## Descriptions across steps
+Add concise (≤2 sentences) descriptions under the main heading of each route: Home, Upload, Review, Confirm, Calculation, Packet. Goal: tell the user what this step is, what they'll do, and what happens next — without walls of text.
 
-Untrusted / suspicious card (`src/components/untrusted-card.tsx`):
-- Read-only. Remove any confirm / edit / reset controls entirely.
-- No "Confirmed" state ever. Label chip reads **"Suspicious — ignored"** in red with an icon + text.
-- Keep it in its own **"Safety check"** section under the two main sections; it does not count toward the progress bar or block "Continue".
+## Files touched
+- `src/routes/upload.tsx` — remove finish button, require application form, add descriptions, add explicit "Not allowed" text, label ban icon.
+- `src/routes/review.tsx` — save-confirmation UI, section descriptions.
+- `src/components/income-source-timeline.tsx` — collapse sources behind "Show sources" toggle, simpler default copy.
+- `src/routes/calculation.tsx` — neutral single-color verdict, no status icon.
+- `src/routes/packet.tsx` — remove "Delete my packet", add "Done — delete session…" button, neutralize PDF verdict styling.
+- `src/routes/index.tsx`, `src/routes/confirm.tsx`, `src/components/page-shell.tsx`, etc. — rename + step descriptions.
+- Rename SimplePath everywhere listed above.
 
-Progress bar counts only trusted merged cards (basic + calculation). "Continue" enables when all trusted merged cards are confirmed.
-
-### Confirm page — compact key/value layout
-
-Rewrite `src/routes/confirm.tsx`:
-- Two grouped sections mirroring Review: **Basic info** and **Values used for calculation**.
-- Basic info renders as a tight **definition list**: `Applicant name: Jordan Rivera`, `Household size: 1`, `Address: 482 Maple St…`, one row per line, label on the left in muted text and the value on the right in medium weight. No large emphasis on the value alone.
-- Calculation values render the same compact way, one row per value.
-- Each row still has an inline **Edit** button that opens `EditableValue` in place; "Show source" collapses by default and only appears when the row is expanded, so the page reads at a glance.
-- Suspicious items are not shown here at all (they're already ignored).
-- Keep the two bottom buttons ("Yes, this information is correct" / "Go back and change something").
-
-### Change log (every edit, not just from original)
-
-Extend `ExtractedField` (and the merged wrapper) with `history: { at: string; from: string; to: string }[]`.
-- `confirmField` / `confirmMerged` push a new entry each time the value changes, comparing against the **previous** value (last history entry's `to`, or `value` if none), not the original OCR value.
-- `ValueCard` and `EditableValue` show "Changed from X to Y" using the most recent history entry.
-- Optional collapsed "Full history" list under the card (small muted text) when history length > 1.
-
-### Calculation page — fix "No confirmed income amount"
-
-Root cause (verified in `src/routes/calculation.tsx` line 33): it searches for a field whose label contains `"pay before"`, but no such label exists — `FIELD_SPECS` only defines `Gross pay`, `Net pay`, `Hourly rate`, `Weekly hours`, `Monthly benefit amount`, `Gross receipts`, `Platform fees`. So `payField` is always `undefined` → error.
-
-Fix by picking a real confirmed income field, in this priority order:
-1. Confirmed `gross_pay` from any pay stub (per-period, use `session.frequency` multiplier).
-2. Confirmed `hourly_rate` × `weekly_hours` from an employment letter → weekly → ×52.
-3. Confirmed `monthly_benefit` → ×12 (force frequency label "monthly" for display).
-4. Confirmed `gross_receipts − platform_fees` from a gig statement → treat as monthly → ×12.
-
-If **multiple** income sources are confirmed, sum their annualized equivalents and show a small breakdown ("Pay stub gross × 26 + Monthly benefit × 12 = …"). Frequency dropdown only applies to pay-stub-style per-period amounts; when only benefit/gig sources exist, hide the frequency row and label the formula accordingly.
-
-The "Confirmed income" editable row shows the field(s) actually used, each with its own `EditableValue` so edits still flow back into the merged store.
-
-### Technical notes
-
-- New helpers in `src/lib/session-store.tsx`: `mergedFields`, `confirmMerged`, `computeAnnualIncome(session)` returning `{ annual, breakdown[], errors[] }`. Calculation page consumes `computeAnnualIncome` instead of inline logic.
-- Auto-scroll uses `element.scrollIntoView({ behavior: "smooth", block: "start" })` plus a `LiveRegion` announcement; respects `prefers-reduced-motion` (fall back to instant scroll).
-- Warning threshold: `TODAY − 6 months = 2026-01-18`. Uses each source's `documentDate` (already captured at upload) or, for date-typed fields, the field value itself.
-- No backend changes; everything stays client-side in the session store.
-
-### Files touched
-
-- `src/lib/session-store.tsx` (merging, history, annual income, warnings)
-- `src/routes/review.tsx` (two-section layout, auto-advance, auto-scroll, source toggle)
-- `src/components/value-card.tsx` (bigger card, source chips, 6-month warning, history line)
-- `src/components/untrusted-card.tsx` (read-only, "Suspicious — ignored" label)
-- `src/routes/confirm.tsx` (compact key/value layout)
-- `src/routes/calculation.tsx` (use `computeAnnualIncome`, remove `pay before` lookup)
+No backend, no session-store schema, no calculation logic changes.

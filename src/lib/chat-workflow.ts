@@ -202,7 +202,7 @@ export function workflowAnswerForQuestion(
       blockers: workflow.blockers,
       nextActions: workflow.nextActions,
       navigation,
-      citations: ["RentSmooth App Security Guide"],
+      citations: ["SimplePath App Security Guide"],
     };
   }
 
@@ -238,7 +238,7 @@ export function sanitizeWorkflowCitations(
     "Current calculation",
     "Current session controls",
     "HUD reference evidence",
-    "RentSmooth App Security Guide",
+    "SimplePath App Security Guide",
     ...(snapshot.referenceEvidence?.chunks.map((chunk) => chunk.id) ?? []),
   ]);
   return citations.filter((citation) => allowed.has(citation)).slice(0, 5);

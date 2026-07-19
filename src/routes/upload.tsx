@@ -17,7 +17,7 @@ import type { EvidenceChunk } from "@/lib/evidence-types";
 export const Route = createFileRoute("/upload")({
   head: () => ({
     meta: [
-      { title: "Upload documents — RentSmooth" },
+      { title: "Upload documents — SimplePath" },
       {
         name: "description",
         content: "Add your income documents. You review everything before it's used.",
@@ -383,8 +383,15 @@ function UploadPage() {
     }
   }
 
-  const canFinish = hasAnyIncome;
+  const canFinish = hasAnyIncome && hasApplication;
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
+  const missingReasons: string[] = [];
+  if (!hasApplication) missingReasons.push("an application form");
+  if (!hasAnyIncome) missingReasons.push("at least one income document");
+  const notAllowedReason =
+    missingReasons.length > 0
+      ? `Not allowed yet — add ${missingReasons.join(" and ")} before continuing.`
+      : "";
 
   const stepLabel = phase === "application" ? "Step 1 of 2" : "Step 2 of 2";
 
@@ -393,7 +400,8 @@ function UploadPage() {
       <LiveRegion message={announcement} />
 
       <p className="text-sm text-muted-foreground">
-        Add your documents. You can review and change anything before it is used.
+        Add the documents that describe you and your income. You'll review every value on the next
+        step — nothing is used until you confirm it.
       </p>
 
       {/* Progress */}
@@ -459,6 +467,7 @@ function UploadPage() {
               type="button"
               onClick={openFilePicker}
               disabled={isExtracting}
+              title={isExtracting ? "Not allowed — a document is currently being read. Please wait." : undefined}
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               aria-describedby={isExtracting ? "application-upload-not-allowed" : undefined}
             >
@@ -614,6 +623,7 @@ function UploadPage() {
               type="button"
               onClick={openFilePicker}
               disabled={isExtracting}
+              title={isExtracting ? "Not allowed — a document is currently being read. Please wait." : undefined}
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               aria-describedby={isExtracting ? "income-upload-not-allowed" : undefined}
             >
@@ -701,35 +711,39 @@ function UploadPage() {
       )}
 
       <div className="mt-8 flex flex-col gap-2">
-        <button
-          type="button"
-          disabled={!canFinish}
-          onClick={() => {
-            setAnnouncement(
-              `Done uploading. ${uploadedCount} document${uploadedCount === 1 ? "" : "s"} added. Going to review.`,
-            );
-            navigate({ to: "/review" });
-          }}
-          className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={
-            canFinish
-              ? "I'm done uploading. Go to review."
-              : "Not allowed. At least one income document is required to continue."
-          }
-          aria-describedby={!canFinish ? "upload-not-allowed" : undefined}
-        >
-          {canFinish ? "I'm done uploading!" : "Not allowed - add an income document"}
-        </button>
-        {!canFinish && (
-          <p id="upload-not-allowed" className="text-xs font-medium text-amber-800">
-            Not allowed yet: at least one income document is required to continue.
-          </p>
+        {canFinish ? (
+          <button
+            type="button"
+            onClick={() => {
+              setAnnouncement(
+                `Done uploading. ${uploadedCount} document${uploadedCount === 1 ? "" : "s"} added. Going to review.`,
+              );
+              navigate({ to: "/review" });
+            }}
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Continue to review your extracted values."
+          >
+            Continue to review
+          </button>
+        ) : (
+          <div
+            role="status"
+            className="rounded-xl border border-amber-500/60 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            <p className="font-semibold">Not allowed to continue yet</p>
+            <p className="mt-1">{notAllowedReason}</p>
+            <ul className="mt-2 list-disc pl-5 text-xs">
+              {!hasApplication && <li>Application form is required.</li>}
+              {!hasAnyIncome && <li>At least one income document is required.</li>}
+            </ul>
+          </div>
         )}
         <p className="text-xs text-muted-foreground">
           Cutoff for document age: <strong>{DATE_CUTOFF}</strong> ({DOCUMENT_AGE_LIMIT_DAYS} days
           before {TODAY}). If a file is older, we'll ask before using it.
         </p>
       </div>
+
 
       {mismatchPending && (
         <div

@@ -19,7 +19,7 @@ function Home() {
           <span>Private. Session only. Never used to train AI.</span>
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-          RentSmooth
+          SimplePath
         </h1>
         <p className="mt-3 text-base text-muted-foreground">
           A calm, step-by-step review of the income documents you upload. You confirm every
@@ -34,20 +34,37 @@ function Home() {
           Start
         </Link>
 
-        <ul className="mt-8 w-full space-y-2 text-left text-sm text-muted-foreground">
-          <li className="flex gap-2">
-            <span aria-hidden="true">1.</span>
-            <span>Upload your documents.</span>
+        <ol className="mt-8 w-full space-y-4 text-left text-sm">
+          <li>
+            <p className="font-semibold text-foreground">1. Upload your documents</p>
+            <p className="text-muted-foreground">
+              Add your application form and at least one income document (pay stubs, benefit
+              letters, tax returns). You can add several files per document.
+            </p>
           </li>
-          <li className="flex gap-2">
-            <span aria-hidden="true">2.</span>
-            <span>Review each value we find, one at a time.</span>
+          <li>
+            <p className="font-semibold text-foreground">2. Review each value</p>
+            <p className="text-muted-foreground">
+              Go through basic values (name, household) and calculation values (hours, pay) one
+              card at a time. The document highlights where each value was found so you can
+              confirm or correct it.
+            </p>
           </li>
-          <li className="flex gap-2">
-            <span aria-hidden="true">3.</span>
-            <span>See the calculation and download your packet.</span>
+          <li>
+            <p className="font-semibold text-foreground">3. See the calculation</p>
+            <p className="text-muted-foreground">
+              We show the annualized income and a plain factual comparison to the referenced
+              threshold — no approval, denial, or score.
+            </p>
           </li>
-        </ul>
+          <li>
+            <p className="font-semibold text-foreground">4. Download your packet</p>
+            <p className="text-muted-foreground">
+              Preview and download a printable PDF for your caseworker or landlord. When you're
+              done, delete the session with one button.
+            </p>
+          </li>
+        </ol>
       </main>
 
       <div className="pb-8">

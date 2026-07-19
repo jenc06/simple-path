@@ -1433,14 +1433,7 @@ function PacketPage() {
             Export packet (JSON)
           </button>
 
-          <button
-            type="button"
-            onClick={deletePacket}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-destructive/40 px-4 text-sm font-medium text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            Delete my packet
-          </button>
+
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Export timestamp: {new Date().toISOString()}

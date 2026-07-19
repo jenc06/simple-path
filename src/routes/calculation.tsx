@@ -26,6 +26,8 @@ function currency(n: number) {
 function CalculationPage() {
   const { session } = useSession();
   const navigate = useNavigate();
+  const [announcement, setAnnouncement] = useState("");
+
 
   const result = useMemo(() => {
     const fields = allFields(session);

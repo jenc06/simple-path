@@ -784,6 +784,18 @@ function PacketPage() {
               src={previewUrl}
               className="h-full w-full flex-1 bg-muted"
             />
+            <div className="border-t bg-card px-4 py-2 text-xs text-muted-foreground">
+              If the preview does not render,{" "}
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                open the PDF in a new tab
+              </a>
+              .
+            </div>
           </div>
         </div>
       )}

@@ -19,8 +19,15 @@ export type DocStatus = "uploaded" | "skipped" | "expired";
 
 export type FieldCategory = "basic" | "calculation" | "untrusted";
 
+export interface FieldHistoryEntry {
+  at: string;
+  from: string;
+  to: string;
+}
+
 export interface ExtractedField {
   id: string;
+  key: string; // normalized field key across docs (e.g. "person_name")
   label: string;
   value: string;
   confidence: number; // 0-100
@@ -30,8 +37,8 @@ export interface ExtractedField {
   confirmed: boolean;
   corrected?: string;
   category?: FieldCategory;
+  history?: FieldHistoryEntry[];
 }
-
 
 export interface UploadedDoc {
   id: string;
@@ -52,26 +59,28 @@ export interface SessionState {
 // Cutoff: More than 60 days before July 18, 2026 => before May 19, 2026
 export const TODAY = "2026-07-18";
 export const DATE_CUTOFF = "2026-05-19";
+// Six months before TODAY — used for "old document" warnings.
+export const SIX_MONTH_CUTOFF = "2026-01-18";
 
 const initialSample = (): SessionState => ({
   startedAt: new Date().toISOString(),
   frequency: "biweekly",
   householdSize: 1,
   docs: [],
-
 });
 
 interface Ctx {
   session: SessionState;
   setSession: (fn: (s: SessionState) => SessionState) => void;
   confirmField: (id: string, corrected?: string) => void;
+  confirmMerged: (key: string, category: FieldCategory, corrected?: string) => void;
   resetSession: () => void;
   deleteSession: () => void;
 }
 
 const SessionCtx = createContext<Ctx | null>(null);
 
-const STORAGE_KEY = "rentsmooth.session.v1";
+const STORAGE_KEY = "rentsmooth.session.v2";
 
 function loadPersisted(): SessionState | null {
   if (typeof window === "undefined") return null;
@@ -80,16 +89,38 @@ function loadPersisted(): SessionState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SessionState;
     if (!parsed || !Array.isArray(parsed.docs)) return null;
-    // Drop any persisted pay_stub / benefit_letter docs so "Added so far" starts clean.
-    return {
-      ...parsed,
-      docs: parsed.docs.filter(
-        (d) => d.type !== "pay_stub" && d.type !== "benefit_letter",
-      ),
-    };
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function withConfirmed(
+  s: SessionState,
+  match: (f: ExtractedField) => boolean,
+  corrected?: string,
+): SessionState {
+  const now = new Date().toISOString();
+  return {
+    ...s,
+    docs: s.docs.map((d) => ({
+      ...d,
+      fields: d.fields.map((f) => {
+        if (!match(f)) return f;
+        const prev = f.corrected ?? f.value;
+        const next = corrected ?? prev;
+        const changed = next !== prev;
+        const history = f.history ? [...f.history] : [];
+        if (changed) history.push({ at: now, from: prev, to: next });
+        return {
+          ...f,
+          confirmed: true,
+          corrected: corrected ?? f.corrected,
+          history,
+        };
+      }),
+    })),
+  };
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -97,10 +128,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => loadPersisted() ?? initialSample(),
   );
 
-  // Persist to sessionStorage on every change so navigating between pages
-  // (or an accidental refresh within the tab) keeps the user's progress.
-  // Ephemeral by design: sessionStorage is cleared when the tab closes,
-  // matching the privacy rule that session data must not linger.
   const skipFirst = useRef(true);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -111,7 +138,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     } catch {
-      // storage unavailable / quota — silently ignore; state stays in memory.
+      // storage unavailable — state stays in memory.
     }
   }, [session]);
 
@@ -120,15 +147,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       session,
       setSession: (fn) => setSessionState(fn),
       confirmField: (id, corrected) =>
-        setSessionState((s) => ({
-          ...s,
-          docs: s.docs.map((d) => ({
-            ...d,
-            fields: d.fields.map((f) =>
-              f.id === id ? { ...f, confirmed: true, corrected } : f,
-            ),
-          })),
-        })),
+        setSessionState((s) => withConfirmed(s, (f) => f.id === id, corrected)),
+      confirmMerged: (key, category, corrected) =>
+        setSessionState((s) =>
+          withConfirmed(
+            s,
+            (f) => f.key === key && f.category === category,
+            corrected,
+          ),
+        ),
       resetSession: () => {
         if (typeof window !== "undefined") {
           window.sessionStorage.removeItem(STORAGE_KEY);
@@ -152,7 +179,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;
 }
-
 
 export function useSession() {
   const ctx = useContext(SessionCtx);
@@ -193,6 +219,221 @@ export const THRESHOLD = {
   url: "https://www.huduser.gov/portal/datasets/mtsp/mtsp26/HERA-Income-Limits-Report-FY26.pdf",
 };
 
+/* ================= Merged (cross-doc) view ================= */
+
+export interface MergedSource {
+  fieldId: string;
+  docId: string;
+  docType: DocType;
+  page: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  value: string;
+  confidence: number;
+  documentDate?: string;
+}
+
+export interface MergedField {
+  key: string;
+  label: string;
+  category: "basic" | "calculation";
+  sources: MergedSource[];
+  displayValue: string;
+  corrected?: string;
+  confirmed: boolean;
+  history: FieldHistoryEntry[];
+  isOld: boolean;
+  oldestSourceDate?: string;
+}
+
+function isoBefore(a: string | undefined, b: string): boolean {
+  if (!a) return false;
+  return a < b;
+}
+
+function looksLikeDate(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+export function mergedFields(s: SessionState): MergedField[] {
+  const groups = new Map<string, MergedField>();
+  const uploadedDocs = s.docs.filter((d) => d.status !== "skipped");
+  for (const doc of uploadedDocs) {
+    for (const f of doc.fields) {
+      if (f.category !== "basic" && f.category !== "calculation") continue;
+      const gid = `${f.category}::${f.key}`;
+      const src: MergedSource = {
+        fieldId: f.id,
+        docId: doc.id,
+        docType: doc.type,
+        page: f.sourcePage,
+        bbox: f.bbox,
+        value: f.value,
+        confidence: f.confidence,
+        documentDate: doc.documentDate,
+      };
+      const existing = groups.get(gid);
+      const corrected = f.corrected;
+      const hist = f.history ?? [];
+      if (!existing) {
+        groups.set(gid, {
+          key: f.key,
+          label: f.label,
+          category: f.category,
+          sources: [src],
+          displayValue: corrected ?? f.value,
+          corrected,
+          confirmed: f.confirmed,
+          history: [...hist],
+          isOld: false,
+          oldestSourceDate: doc.documentDate,
+        });
+      } else {
+        existing.sources.push(src);
+        existing.confirmed = existing.confirmed && f.confirmed;
+        if (corrected) existing.corrected = corrected;
+        // merge history preserving order
+        existing.history = [...existing.history, ...hist].sort((a, b) =>
+          a.at.localeCompare(b.at),
+        );
+        if (
+          doc.documentDate &&
+          (!existing.oldestSourceDate ||
+            doc.documentDate < existing.oldestSourceDate)
+        ) {
+          existing.oldestSourceDate = doc.documentDate;
+        }
+      }
+    }
+  }
+  for (const m of groups.values()) {
+    // pick display value: user correction first, else highest-confidence source value
+    if (m.corrected) {
+      m.displayValue = m.corrected;
+    } else {
+      const best = [...m.sources].sort((a, b) => b.confidence - a.confidence)[0];
+      m.displayValue = best?.value ?? m.displayValue;
+    }
+    // 6-month check: any source doc older than cutoff, or the value itself
+    // is a date older than cutoff.
+    const dateFromValue = looksLikeDate(m.displayValue) ? m.displayValue : undefined;
+    m.isOld =
+      isoBefore(m.oldestSourceDate, SIX_MONTH_CUTOFF) ||
+      isoBefore(dateFromValue, SIX_MONTH_CUTOFF);
+  }
+  return [...groups.values()];
+}
+
+/* ================= Annual income computation ================= */
+
+export interface IncomeContribution {
+  label: string;
+  formula: string;
+  amount: number; // annualized
+}
+
+export interface IncomeResult {
+  annual: number;
+  contributions: IncomeContribution[];
+  errors: string[];
+  usesPayFrequency: boolean;
+}
+
+function confirmedValue(f: ExtractedField | undefined): string | undefined {
+  if (!f || !f.confirmed) return undefined;
+  return f.corrected ?? f.value;
+}
+
+export function computeAnnualIncome(s: SessionState): IncomeResult {
+  const contributions: IncomeContribution[] = [];
+  const errors: string[] = [];
+  let usesPayFrequency = false;
+
+  const uploaded = s.docs.filter((d) => d.status !== "skipped");
+
+  for (const doc of uploaded) {
+    const byKey = new Map<string, ExtractedField>();
+    for (const f of doc.fields) byKey.set(f.key, f);
+
+    if (doc.type === "pay_stub") {
+      const gross = confirmedValue(byKey.get("gross_pay"));
+      if (gross) {
+        usesPayFrequency = true;
+        const amt = parseAmount(gross);
+        const mult = frequencyMultiplier(s.frequency);
+        if (Number.isNaN(amt)) {
+          errors.push(`Pay stub gross pay is not a number (${gross}).`);
+        } else if (mult === null) {
+          errors.push("Pay frequency is unknown. Please set it before continuing.");
+        } else {
+          contributions.push({
+            label: `Pay stub — ${doc.fileName}`,
+            formula: `$${amt.toFixed(2)} × ${mult} (${s.frequency})`,
+            amount: amt * mult,
+          });
+        }
+      }
+    }
+
+    if (doc.type === "employment_letter") {
+      const rate = confirmedValue(byKey.get("hourly_rate"));
+      const hours = confirmedValue(byKey.get("weekly_hours"));
+      if (rate && hours) {
+        const r = parseAmount(rate);
+        const h = parseAmount(hours);
+        if (!Number.isNaN(r) && !Number.isNaN(h)) {
+          contributions.push({
+            label: `Employment letter — ${doc.fileName}`,
+            formula: `$${r.toFixed(2)} × ${h} hrs/wk × 52`,
+            amount: r * h * 52,
+          });
+        }
+      }
+    }
+
+    if (doc.type === "benefit_letter") {
+      const monthly = confirmedValue(byKey.get("monthly_benefit"));
+      if (monthly) {
+        const m = parseAmount(monthly);
+        if (!Number.isNaN(m)) {
+          contributions.push({
+            label: `Benefit letter — ${doc.fileName}`,
+            formula: `$${m.toFixed(2)} × 12 (monthly)`,
+            amount: m * 12,
+          });
+        }
+      }
+    }
+
+    if (doc.type === "gig_statement") {
+      const gross = confirmedValue(byKey.get("gross_receipts"));
+      const fees = confirmedValue(byKey.get("platform_fees"));
+      if (gross) {
+        const g = parseAmount(gross);
+        const p = fees ? parseAmount(fees) : 0;
+        if (!Number.isNaN(g)) {
+          const net = g - (Number.isNaN(p) ? 0 : p);
+          contributions.push({
+            label: `Gig statement — ${doc.fileName}`,
+            formula: `($${g.toFixed(2)} − $${(Number.isNaN(p) ? 0 : p).toFixed(2)}) × 12 (monthly)`,
+            amount: net * 12,
+          });
+        }
+      }
+    }
+  }
+
+  if (contributions.length === 0 && errors.length === 0) {
+    errors.push(
+      "No confirmed income values yet. Confirm income fields on the Review page to enable this calculation.",
+    );
+  }
+
+  const annual = contributions.reduce((sum, c) => sum + c.amount, 0);
+  return { annual, contributions, errors, usesPayFrequency };
+}
+
+/* ================= Field specs & mock extraction ================= */
+
 type FieldSpec = {
   key: string;
   label: string;
@@ -211,7 +452,7 @@ const FIELD_SPECS: Record<DocType, FieldSpec[]> = {
     { key: "application_date", label: "Application date", value: "2026-07-10", confidence: 94, category: "basic", page: 1, bbox: { x: 12, y: 48, w: 30, h: 5 } },
   ],
   pay_stub: [
-    { key: "person_name", label: "Employee name", value: "Jordan Rivera", confidence: 95, category: "basic", page: 1, bbox: { x: 10, y: 10, w: 40, h: 5 } },
+    { key: "person_name", label: "Applicant name", value: "Jordan Rivera", confidence: 95, category: "basic", page: 1, bbox: { x: 10, y: 10, w: 40, h: 5 } },
     { key: "pay_date", label: "Pay date", value: "2026-07-03", confidence: 93, category: "basic", page: 1, bbox: { x: 55, y: 10, w: 30, h: 5 } },
     { key: "pay_period_start", label: "Pay period start", value: "2026-06-16", confidence: 90, category: "basic", page: 1, bbox: { x: 10, y: 20, w: 30, h: 5 } },
     { key: "pay_period_end", label: "Pay period end", value: "2026-06-30", confidence: 90, category: "basic", page: 1, bbox: { x: 45, y: 20, w: 30, h: 5 } },
@@ -222,19 +463,19 @@ const FIELD_SPECS: Record<DocType, FieldSpec[]> = {
     { key: "net_pay", label: "Net pay", value: "$1,412.30", confidence: 92, category: "calculation", page: 1, bbox: { x: 60, y: 55, w: 25, h: 5 } },
   ],
   employment_letter: [
-    { key: "person_name", label: "Employee name", value: "Jordan Rivera", confidence: 94, category: "basic", page: 1, bbox: { x: 12, y: 22, w: 40, h: 5 } },
+    { key: "person_name", label: "Applicant name", value: "Jordan Rivera", confidence: 94, category: "basic", page: 1, bbox: { x: 12, y: 22, w: 40, h: 5 } },
     { key: "document_date", label: "Letter date", value: "2026-06-28", confidence: 92, category: "basic", page: 1, bbox: { x: 65, y: 10, w: 25, h: 5 } },
     { key: "weekly_hours", label: "Weekly hours", value: "40", confidence: 86, category: "calculation", page: 1, bbox: { x: 12, y: 42, w: 20, h: 5 } },
     { key: "hourly_rate", label: "Hourly rate", value: "$22.50", confidence: 87, category: "calculation", page: 1, bbox: { x: 40, y: 42, w: 20, h: 5 } },
   ],
   benefit_letter: [
-    { key: "person_name", label: "Recipient name", value: "Jordan Rivera", confidence: 93, category: "basic", page: 1, bbox: { x: 12, y: 20, w: 40, h: 5 } },
+    { key: "person_name", label: "Applicant name", value: "Jordan Rivera", confidence: 93, category: "basic", page: 1, bbox: { x: 12, y: 20, w: 40, h: 5 } },
     { key: "document_date", label: "Letter date", value: "2026-06-15", confidence: 90, category: "basic", page: 1, bbox: { x: 65, y: 10, w: 25, h: 5 } },
     { key: "benefit_frequency", label: "Benefit frequency", value: "Monthly", confidence: 82, category: "basic", page: 1, bbox: { x: 12, y: 55, w: 25, h: 5 } },
     { key: "monthly_benefit", label: "Monthly benefit amount", value: "$914.00", confidence: 91, category: "calculation", page: 1, bbox: { x: 12, y: 40, w: 30, h: 5 } },
   ],
   gig_statement: [
-    { key: "person_name", label: "Worker name", value: "Jordan Rivera", confidence: 89, category: "basic", page: 1, bbox: { x: 12, y: 12, w: 40, h: 5 } },
+    { key: "person_name", label: "Applicant name", value: "Jordan Rivera", confidence: 89, category: "basic", page: 1, bbox: { x: 12, y: 12, w: 40, h: 5 } },
     { key: "statement_month", label: "Statement month", value: "June 2026", confidence: 90, category: "basic", page: 1, bbox: { x: 60, y: 12, w: 28, h: 5 } },
     { key: "gross_receipts", label: "Gross receipts", value: "$1,240.00", confidence: 85, category: "calculation", page: 1, bbox: { x: 12, y: 42, w: 30, h: 5 } },
     { key: "platform_fees", label: "Platform fees", value: "$186.00", confidence: 78, category: "calculation", page: 1, bbox: { x: 12, y: 52, w: 30, h: 5 } },
@@ -253,6 +494,7 @@ export function mockFieldsFor(docType: DocType, docId: string): ExtractedField[]
   const specs = FIELD_SPECS[docType] ?? [];
   const fields: ExtractedField[] = specs.map((s) => ({
     id: `${docId}-${s.key}`,
+    key: s.key,
     label: s.label,
     value: s.value,
     confidence: s.confidence,
@@ -261,9 +503,11 @@ export function mockFieldsFor(docType: DocType, docId: string): ExtractedField[]
     bbox: s.bbox,
     confirmed: false,
     category: s.category,
+    history: [],
   }));
   fields.push({
     id: `${docId}-untrusted`,
+    key: "untrusted_instruction",
     label: "Suspicious instruction",
     value: UNTRUSTED_SNIPPETS[docType],
     confidence: 0,
@@ -272,7 +516,7 @@ export function mockFieldsFor(docType: DocType, docId: string): ExtractedField[]
     bbox: { x: 10, y: 75, w: 78, h: 8 },
     confirmed: false,
     category: "untrusted",
+    history: [],
   });
   return fields;
 }
-

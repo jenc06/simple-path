@@ -184,7 +184,9 @@ function CalculationPage() {
 
             <div className="mt-3 flex items-center gap-3" aria-hidden="true">
               <span className="text-2xl font-semibold">{currency(result.annual)}</span>
-              <ArrowRight className="h-5 w-5 text-muted-foreground" />
+              <span className="text-2xl font-semibold text-muted-foreground" aria-hidden="true">
+                {belowOrEqual ? "≤" : "≥"}
+              </span>
               <span className="text-2xl font-semibold">{currency(threshold.amount)}</span>
             </div>
 

@@ -988,7 +988,15 @@ function PacketPage() {
 
   function downloadPdf() {
     const pdf = buildPdf();
-    pdf.save("simplepath-packet.pdf");
+    const blob = pdf.output("blob");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "simplepath-packet.pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     recordAudit("packet_export", { route: "/packet", status: "pdf" });
     finalizePacket({ status: "pdf" });
     setAnnouncement("PDF packet downloaded to your device.");

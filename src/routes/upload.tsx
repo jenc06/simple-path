@@ -245,30 +245,42 @@ function UploadPage() {
                   <span className="font-medium">{DOC_LABELS[d.type]}</span>
                   <span className="ml-2 text-muted-foreground">{d.fileName}</span>
                 </span>
-                <span
-                  className={
-                    "ml-3 inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium " +
-                    (d.status === "uploaded"
-                      ? "border border-emerald-600/30 bg-emerald-50 text-emerald-800"
-                      : d.status === "expired"
-                        ? "border border-amber-600/40 bg-amber-50 text-amber-900"
-                        : "border border-input bg-muted text-muted-foreground")
-                  }
-                >
-                  {d.status === "uploaded" && (
-                    <>
-                      <Check className="h-3 w-3" aria-hidden="true" />
-                      Uploaded
-                    </>
-                  )}
-                  {d.status === "expired" && (
-                    <>
-                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                      Old — allowed
-                    </>
-                  )}
-                  {d.status === "skipped" && "Not provided"}
-                </span>
+                <div className="ml-3 flex items-center gap-2">
+                  <span
+                    className={
+                      "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium " +
+                      (d.status === "uploaded"
+                        ? "border border-emerald-600/30 bg-emerald-50 text-emerald-800"
+                        : d.status === "expired"
+                          ? "border border-amber-600/40 bg-amber-50 text-amber-900"
+                          : "border border-input bg-muted text-muted-foreground")
+                    }
+                  >
+                    {d.status === "uploaded" && (
+                      <>
+                        <Check className="h-3 w-3" aria-hidden="true" />
+                        Uploaded
+                      </>
+                    )}
+                    {d.status === "expired" && (
+                      <>
+                        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                        Old — allowed
+                      </>
+                    )}
+                    {d.status === "skipped" && "Not provided"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => deleteDoc(d.id)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={`Remove ${DOC_LABELS[d.type]}`}
+                    title={`Remove ${DOC_LABELS[d.type]}`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Remove</span>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

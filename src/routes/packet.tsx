@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Download, Eye, Trash2, X } from "lucide-react";
+import { Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import jsPDF from "jspdf";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import {
   DOC_LABELS,
@@ -12,6 +13,7 @@ import {
   useSession,
   type DocType,
 } from "@/lib/session-store";
+
 
 export const Route = createFileRoute("/packet")({
   head: () => ({
@@ -89,7 +91,7 @@ function PacketPage() {
     },
   };
 
-  function download() {
+  function downloadJson() {
     const blob = new Blob([JSON.stringify(jsonExport, null, 2)], {
       type: "application/json",
     });
@@ -101,8 +103,174 @@ function PacketPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setAnnouncement("Packet downloaded to your device.");
+    setAnnouncement("JSON packet downloaded to your device.");
   }
+
+  function downloadPdf() {
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 48;
+    const maxWidth = pageWidth - margin * 2;
+    let y = margin;
+
+    const ensureSpace = (needed: number) => {
+      if (y + needed > pageHeight - margin) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    const heading = (text: string) => {
+      ensureSpace(28);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(20);
+      doc.text(text, margin, y);
+      y += 18;
+    };
+
+    const line = (text: string, opts?: { bold?: boolean; muted?: boolean }) => {
+      doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(opts?.muted ? 110 : 40);
+      const wrapped = doc.splitTextToSize(text, maxWidth);
+      for (const w of wrapped) {
+        ensureSpace(15);
+        doc.text(w, margin, y);
+        y += 14;
+      }
+    };
+
+    const kv = (k: string, v: string) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      const label = `${k}: `;
+      const labelWidth = doc.getTextWidth(label);
+      const valueLines = doc.splitTextToSize(v, maxWidth - labelWidth);
+      ensureSpace(15);
+      doc.setTextColor(110);
+      doc.text(label, margin, y);
+      doc.setTextColor(20);
+      doc.text(valueLines[0], margin + labelWidth, y);
+      y += 14;
+      for (let i = 1; i < valueLines.length; i++) {
+        ensureSpace(15);
+        doc.text(valueLines[i], margin + labelWidth, y);
+        y += 14;
+      }
+    };
+
+    const divider = () => {
+      ensureSpace(14);
+      doc.setDrawColor(220);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 12;
+    };
+
+    // Title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(20);
+    doc.text("RentSmooth packet", margin, y);
+    y += 22;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(110);
+    doc.text(`Generated ${new Date().toLocaleString()}`, margin, y);
+    y += 18;
+    divider();
+
+    heading("Renter information");
+    kv("Household size", String(session.householdSize));
+    kv("Session started", new Date(session.startedAt).toLocaleString());
+    kv("Pay frequency", session.frequency);
+    y += 4;
+
+    heading("Document checklist");
+    checklist.forEach((c) => {
+      const stateText = {
+        ok: "Provided",
+        expired: "Uploaded but expired",
+        missing: "Not uploaded",
+        skipped: "Marked as N/A",
+      }[c.state];
+      kv(DOC_LABELS[c.type], stateText);
+    });
+    y += 4;
+
+    heading("Documents reviewed");
+    const reviewed = session.docs.filter((d) => d.status !== "skipped");
+    if (reviewed.length === 0) {
+      line("No documents reviewed.", { muted: true });
+    } else {
+      reviewed.forEach((d) => kv(DOC_LABELS[d.type], d.fileName));
+    }
+    y += 4;
+
+    heading("Confirmed income information");
+    if (fields.length === 0) {
+      line("No values on record yet.", { muted: true });
+    } else {
+      fields.forEach((f) => {
+        kv(f.label, f.corrected ?? f.value);
+        line(
+          `${DOC_LABELS[f.sourceDoc]}, page ${f.sourcePage} — ${f.confidence}% confidence${f.corrected ? " — Corrected by you" : ""}`,
+          { muted: true },
+        );
+      });
+    }
+    y += 4;
+
+    heading("Calculation details");
+    if (Number.isNaN(annual)) {
+      line("Calculation unavailable — missing confirmed income or frequency.", {
+        bold: true,
+      });
+    } else {
+      kv("Formula", `${currency(amount)} × ${mult} = ${currency(annual)}`);
+      kv("Annualized income", currency(annual));
+      kv("Threshold", currency(THRESHOLD.amount));
+      kv(
+        "Comparison",
+        belowOrEqual ? "Below or equal to threshold" : "Above threshold",
+      );
+    }
+    y += 4;
+
+    heading("Items that need review");
+    if (needsReview.length === 0) {
+      line("Everything is confirmed.");
+    } else {
+      needsReview.forEach((f) => line(`• ${f.label} — ${f.corrected ?? f.value}`));
+    }
+    y += 4;
+
+    heading("Sources used");
+    kv("Source", THRESHOLD.source);
+    kv("Value used", `${THRESHOLD.label} = ${currency(THRESHOLD.amount)}`);
+    kv("Effective", THRESHOLD.effective);
+    kv("Page", String(THRESHOLD.page));
+    kv("URL", THRESHOLD.url);
+
+    divider();
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    const footer = doc.splitTextToSize(
+      "RentSmooth organizes documents and shows factual comparisons. It does not approve or deny housing eligibility.",
+      maxWidth,
+    );
+    footer.forEach((f: string) => {
+      ensureSpace(12);
+      doc.text(f, margin, y);
+      y += 12;
+    });
+
+    doc.save("rentsmooth-packet.pdf");
+    setAnnouncement("PDF packet downloaded to your device.");
+  }
+
 
   function deletePacket() {
     setSession((s) => ({ ...s, docs: [] }));
@@ -124,12 +292,13 @@ function PacketPage() {
         </button>
         <button
           type="button"
-          onClick={download}
+          onClick={downloadPdf}
           className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
-          Download
+          Download PDF
         </button>
+
       </div>
 
       <Section title="Renter information">
@@ -252,12 +421,21 @@ function PacketPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
-            onClick={download}
+            onClick={downloadPdf}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
+            Export packet (PDF)
+          </button>
+          <button
+            type="button"
+            onClick={downloadJson}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <FileText className="h-4 w-4" aria-hidden="true" />
             Export packet (JSON)
           </button>
+
           <button
             type="button"
             onClick={deletePacket}

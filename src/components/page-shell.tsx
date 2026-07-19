@@ -26,7 +26,7 @@ export function PageShell({ title, step, children, hideBack }: PageShellProps) {
       </a>
 
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-2 px-4 py-3">
+        <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2 px-4 py-3">
           {!hideBack && (
             <button
               type="button"

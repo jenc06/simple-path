@@ -526,6 +526,7 @@ function CanonicalIncomeSourceEditor({
   const initial = review.canonical ?? details.suggested;
   const [draft, setDraft] = useState<CanonicalIncomeSourceValues>(initial);
   const [error, setError] = useState("");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
   function update(key: keyof CanonicalIncomeSourceValues, value: string) {
     const next = { ...draft, [key]: value };

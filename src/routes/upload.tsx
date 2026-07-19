@@ -58,9 +58,11 @@ function UploadPage() {
     setSession((s) => ({
       ...s,
       docs: [
-        ...s.docs.filter((d) => d.type !== type),
+        // Keep prior docs of this type so users can add multiple (e.g. two pay stubs).
+        // Only replace a prior "skipped" placeholder for this type.
+        ...s.docs.filter((d) => !(d.type === type && d.status === "skipped")),
         {
-          id: `${type}-${Date.now()}`,
+          id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           type,
           fileName,
           documentDate,
@@ -76,34 +78,53 @@ function UploadPage() {
   }
 
   function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     // Reset so choosing the same file again still fires change.
     e.target.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
 
     const MAX_BYTES = 20 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
+    let addedCount = 0;
+    let pendingOld: null | { docType: DocType; fileName: string; date: string } = null;
+    let tooLarge = 0;
+
+    for (const file of files) {
+      if (file.size > MAX_BYTES) {
+        tooLarge += 1;
+        continue;
+      }
+      const fileName = file.name;
+      const date = new Date(file.lastModified).toISOString().slice(0, 10);
+
+      if (date < DATE_CUTOFF) {
+        // Queue the first old-dated file for confirmation; skip any others in this batch.
+        if (!pendingOld) {
+          pendingOld = { docType: currentType, fileName, date };
+        }
+        continue;
+      }
+      addDoc(currentType, fileName, date, "uploaded");
+      addedCount += 1;
+    }
+
+    const sizeMsg = tooLarge > 0 ? ` ${tooLarge} file${tooLarge === 1 ? " was" : "s were"} larger than 20 MB and skipped.` : "";
+
+    if (pendingOld) {
+      setOldDatePending(pendingOld);
       setAnnouncement(
-        `That file is larger than 20 MB. Please choose a smaller file.`,
+        `${addedCount} file${addedCount === 1 ? "" : "s"} added. One older file needs your confirmation.${sizeMsg}`,
       );
       return;
     }
 
-    const fileName = file.name;
-    const date = new Date(file.lastModified).toISOString().slice(0, 10);
-
-    if (date < DATE_CUTOFF) {
-      setOldDatePending({ docType: currentType, fileName, date });
+    if (addedCount > 0) {
       setAnnouncement(
-        `This ${DOC_LABELS[currentType]} is dated ${date}, which is more than 60 days before ${TODAY}. Confirmation required.`,
+        `${addedCount} ${DOC_LABELS[currentType]} file${addedCount === 1 ? "" : "s"} added. Moved to next document.${sizeMsg}`,
       );
-      return;
+      next();
+    } else if (tooLarge > 0) {
+      setAnnouncement(`No files added.${sizeMsg}`);
     }
-    addDoc(currentType, fileName, date, "uploaded");
-    setAnnouncement(
-      `${DOC_LABELS[currentType]} uploaded: ${fileName}. Moved to next document.`,
-    );
-    next();
   }
 
   function skip() {

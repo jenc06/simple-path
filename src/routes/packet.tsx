@@ -3,6 +3,8 @@ import { Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import { PageShell, LiveRegion } from "@/components/page-shell";
+import { EditableValue } from "@/components/editable-value";
+
 import {
   DOC_LABELS,
   THRESHOLD,

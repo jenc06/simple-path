@@ -128,6 +128,23 @@ function UploadPage() {
     if (stepIdx < STEPS.length - 1) setStepIdx(stepIdx + 1);
   }
 
+  function prev() {
+    if (stepIdx > 0) setStepIdx(stepIdx - 1);
+  }
+
+  function deleteDoc(id: string) {
+    const doc = session.docs.find((d) => d.id === id);
+    setSession((s) => ({
+      ...s,
+      docs: s.docs.filter((d) => d.id !== id),
+    }));
+    if (doc) {
+      setAnnouncement(
+        `${DOC_LABELS[doc.type]} removed. You can upload it again or continue.`,
+      );
+    }
+  }
+
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
   const canFinish = session.docs.length > 0;
 

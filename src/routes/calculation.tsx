@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Check } from "lucide-react";
-import { useMemo } from "react";
-import { PageShell } from "@/components/page-shell";
+import { useMemo, useState } from "react";
+import { PageShell, LiveRegion } from "@/components/page-shell";
+import { EditableValue } from "@/components/editable-value";
+
 import {
   THRESHOLD,
   allFields,
@@ -24,11 +26,17 @@ function currency(n: number) {
 function CalculationPage() {
   const { session } = useSession();
   const navigate = useNavigate();
+  const [announcement, setAnnouncement] = useState("");
+
+
+  const payField = useMemo(
+    () => allFields(session).find((f) => f.label.toLowerCase().includes("pay before")),
+    [session],
+  );
 
   const result = useMemo(() => {
-    const fields = allFields(session);
-    const payField = fields.find((f) => f.label.toLowerCase().includes("pay before"));
     const raw = payField ? (payField.corrected ?? payField.value) : "";
+
     const amount = parseAmount(raw);
     const mult = frequencyMultiplier(session.frequency);
 
@@ -54,6 +62,9 @@ function CalculationPage() {
 
   return (
     <PageShell title="Calculation" step="Annualize and compare">
+      <LiveRegion message={announcement} />
+
+
       {result.errors.length > 0 ? (
         <div
           role="alert"
@@ -88,10 +99,26 @@ function CalculationPage() {
             <p className="mt-1 text-4xl font-bold tracking-tight">{currency(result.annual)}</p>
 
             <dl className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div>
+              <div className="sm:col-span-2">
                 <dt className="text-muted-foreground">Confirmed income</dt>
-                <dd className="font-semibold">{currency(result.amount)}</dd>
+                <dd className="mt-1">
+                  {payField ? (
+                    <EditableValue
+                      field={payField}
+                      size="md"
+                      ariaLabel="Pay before taxes"
+                      onSaved={(v) =>
+                        setAnnouncement(
+                          `Pay before taxes updated to ${v}. Annualized income recalculated.`,
+                        )
+                      }
+                    />
+                  ) : (
+                    <span className="font-semibold">{currency(result.amount)}</span>
+                  )}
+                </dd>
               </div>
+
               <div>
                 <dt className="text-muted-foreground">Frequency</dt>
                 <dd className="font-semibold">{freqLabel[session.frequency]}</dd>

@@ -3,6 +3,8 @@ import { Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import { PageShell, LiveRegion } from "@/components/page-shell";
+import { EditableValue } from "@/components/editable-value";
+
 import {
   DOC_LABELS,
   THRESHOLD,
@@ -344,19 +346,25 @@ function PacketPage() {
             {fields.map((f) => (
               <li
                 key={f.id}
-                className="flex flex-col gap-0.5 rounded-md border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-1.5 rounded-md border bg-card px-3 py-3"
               >
-                <span>
-                  <span className="font-medium">{f.label}:</span>{" "}
-                  <span>{f.corrected ?? f.value}</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {f.label}
                 </span>
+                <EditableValue
+                  field={f}
+                  size="md"
+                  onSaved={(v) =>
+                    setAnnouncement(`${f.label} updated to ${v}. Packet recalculated.`)
+                  }
+                />
                 <span className="text-xs text-muted-foreground">
                   {DOC_LABELS[f.sourceDoc]}, page {f.sourcePage} • {f.confidence}% confidence
-                  {f.corrected ? " • Corrected by you" : ""}
                 </span>
               </li>
             ))}
           </ul>
+
         )}
       </Section>
 

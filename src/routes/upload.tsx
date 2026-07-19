@@ -511,6 +511,11 @@ function UploadPage() {
         >
           I'm done uploading!
         </button>
+        {!canFinish && (
+          <p className="text-xs font-medium text-amber-800">
+            At least one income document is required to continue.
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           Cutoff for document age: <strong>{DATE_CUTOFF}</strong> (60 days before {TODAY}). If a
           file is older, we'll ask before using it.

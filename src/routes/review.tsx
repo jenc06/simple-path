@@ -314,9 +314,13 @@ function ReviewPage() {
 
           {orderedCalc.length > 0 && (
             <section aria-labelledby="section-calc">
-              <h2 ref={calcHeader} id="section-calc" className="mb-3 text-lg font-semibold">
+              <h2 ref={calcHeader} id="section-calc" className="mb-1 text-lg font-semibold">
                 Values used for calculation
               </h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Numbers that determine annual income. Confirm each one; changes update the totals
+                on the next page.
+              </p>
               <div className="space-y-2.5">
                 {orderedCalc.map((m) => {
                   const key = mkKey(m);

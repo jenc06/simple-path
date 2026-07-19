@@ -1,10 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import { DocPreview } from "@/components/doc-preview";
 import { UntrustedCard } from "@/components/untrusted-card";
-import { ValueCard } from "@/components/value-card";
-import { DOC_LABELS, useSession, type ExtractedField } from "@/lib/session-store";
+import { MergedValueCard } from "@/components/merged-value-card";
+import {
+  DOC_LABELS,
+  mergedFields,
+  useSession,
+  type ExtractedField,
+  type MergedField,
+  type MergedSource,
+} from "@/lib/session-store";
 
 export const Route = createFileRoute("/review")({
   head: () => ({
@@ -13,7 +20,7 @@ export const Route = createFileRoute("/review")({
       {
         name: "description",
         content:
-          "Confirm each extracted value. Edit any value inline, see where it was found, and skip nothing.",
+          "Confirm each extracted value one at a time. Basic info first, then values used for calculation.",
       },
     ],
   }),
@@ -24,43 +31,98 @@ function ReviewPage() {
   const { session } = useSession();
   const navigate = useNavigate();
 
-  const docs = session.docs.filter((d) => d.status !== "skipped" && d.fields.length > 0);
+  const merged = useMemo(() => mergedFields(session), [session]);
 
-  const allTrusted = useMemo(
-    () =>
-      docs.flatMap((d) => d.fields).filter((f) => f.category !== "untrusted"),
-    [docs],
+  // Stable order: unconfirmed first (preserving original order), confirmed at bottom.
+  const orderedBasic = useMemo(() => sortByConfirmation(merged.filter((m) => m.category === "basic")), [merged]);
+  const orderedCalc = useMemo(() => sortByConfirmation(merged.filter((m) => m.category === "calculation")), [merged]);
+
+  const basicDone = orderedBasic.every((m) => m.confirmed);
+  const calcDone = orderedCalc.every((m) => m.confirmed);
+  const totalCards = orderedBasic.length + orderedCalc.length;
+  const confirmedCount =
+    orderedBasic.filter((m) => m.confirmed).length +
+    orderedCalc.filter((m) => m.confirmed).length;
+  const allDone = totalCards > 0 && confirmedCount === totalCards;
+
+  const firstPending =
+    orderedBasic.find((m) => !m.confirmed) ??
+    orderedCalc.find((m) => !m.confirmed) ??
+    orderedBasic[0] ??
+    orderedCalc[0];
+
+  const [activeKey, setActiveKey] = useState<string | null>(
+    firstPending ? mkKey(firstPending) : null,
   );
-  const confirmedCount = allTrusted.filter((f) => f.confirmed).length;
-  const total = allTrusted.length;
-  const allDone = total > 0 && confirmedCount === total;
-
-  // First unconfirmed field becomes active by default.
-  const firstPending = allTrusted.find((f) => !f.confirmed);
-  const [activeId, setActiveId] = useState<string | null>(firstPending?.id ?? allTrusted[0]?.id ?? null);
+  const [activeSourceByKey, setActiveSourceByKey] = useState<Record<string, string>>({});
   const [announcement, setAnnouncement] = useState("");
+  const basicHeader = useRef<HTMLHeadingElement>(null);
+  const calcHeader = useRef<HTMLHeadingElement>(null);
+  const activeCardRef = useRef<HTMLDivElement>(null);
 
-  const activeField: ExtractedField | undefined = useMemo(
-    () => docs.flatMap((d) => d.fields).find((f) => f.id === activeId),
-    [docs, activeId],
-  );
+  const activeMerged: MergedField | undefined = useMemo(() => {
+    if (!activeKey) return undefined;
+    return [...orderedBasic, ...orderedCalc].find((m) => mkKey(m) === activeKey);
+  }, [activeKey, orderedBasic, orderedCalc]);
 
-  // If the currently active field just got confirmed, advance to the next pending one.
+  const activeSource: MergedSource | undefined = useMemo(() => {
+    if (!activeMerged) return undefined;
+    const chosenId = activeSourceByKey[mkKey(activeMerged)];
+    return (
+      activeMerged.sources.find((s) => s.fieldId === chosenId) ??
+      [...activeMerged.sources].sort((a, b) => b.confidence - a.confidence)[0]
+    );
+  }, [activeMerged, activeSourceByKey]);
+
+  // When the active card gets confirmed, advance to next unconfirmed and
+  // auto-scroll to the next section if we finished a category.
+  const prevBasicDone = useRef(basicDone);
   useEffect(() => {
-    if (!activeField) return;
-    if (activeField.confirmed) {
-      const next = allTrusted.find((f) => !f.confirmed);
-      if (next) setActiveId(next.id);
+    if (!basicDone) {
+      prevBasicDone.current = false;
+      return;
     }
-  }, [activeField, allTrusted]);
+    if (!prevBasicDone.current && basicDone && !calcDone) {
+      // just finished basic
+      setAnnouncement("Basic values complete. Moving to values used for calculation.");
+      const next = orderedCalc.find((m) => !m.confirmed);
+      if (next) setActiveKey(mkKey(next));
+      calcHeader.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    prevBasicDone.current = basicDone;
+  }, [basicDone, calcDone, orderedCalc]);
 
-  function handleConfirmed(field: ExtractedField) {
+  useEffect(() => {
+    // If the active card became confirmed, advance
+    if (!activeMerged || !activeMerged.confirmed) return;
+    const next =
+      orderedBasic.find((m) => !m.confirmed) ??
+      orderedCalc.find((m) => !m.confirmed);
+    if (next) setActiveKey(mkKey(next));
+  }, [activeMerged, orderedBasic, orderedCalc]);
+
+  useEffect(() => {
+    // Scroll active card into view when it changes.
+    activeCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [activeKey]);
+
+  function handleConfirmed(m: MergedField) {
     setAnnouncement(
-      `${field.label} confirmed. ${Math.min(confirmedCount + 1, total)} of ${total} values done.`,
+      `${m.label} confirmed. ${Math.min(confirmedCount + 1, totalCards)} of ${totalCards} values done.`,
     );
   }
 
-  if (total === 0) {
+  function handleSourceChange(m: MergedField, s: MergedSource) {
+    setActiveSourceByKey((prev) => ({ ...prev, [mkKey(m)]: s.fieldId }));
+  }
+
+  // Untrusted fields — always visible in Safety check, per doc.
+  const uploadedDocs = session.docs.filter((d) => d.status !== "skipped");
+  const untrusted: ExtractedField[] = uploadedDocs.flatMap((d) =>
+    d.fields.filter((f) => f.category === "untrusted"),
+  );
+
+  if (totalCards === 0) {
     return (
       <PageShell title="Nothing to review" step="Review">
         <p className="text-sm text-muted-foreground">
@@ -77,8 +139,24 @@ function ReviewPage() {
     );
   }
 
+  const previewField: ExtractedField | undefined =
+    activeMerged && activeSource
+      ? {
+          id: activeSource.fieldId,
+          key: activeMerged.key,
+          label: activeMerged.label,
+          value: activeSource.value,
+          confidence: activeSource.confidence,
+          sourceDoc: activeSource.docType,
+          sourcePage: activeSource.page,
+          bbox: activeSource.bbox,
+          confirmed: activeMerged.confirmed,
+          category: activeMerged.category,
+        }
+      : undefined;
+
   return (
-    <PageShell title="Review extracted values" step={`${confirmedCount} of ${total} confirmed`}>
+    <PageShell title="Review extracted values" step={`${confirmedCount} of ${totalCards} confirmed`}>
       <LiveRegion message={announcement} />
 
       {/* Progress bar */}
@@ -87,31 +165,31 @@ function ReviewPage() {
         role="progressbar"
         aria-valuenow={confirmedCount}
         aria-valuemin={0}
-        aria-valuemax={total}
-        aria-label={`${confirmedCount} of ${total} values confirmed`}
+        aria-valuemax={totalCards}
+        aria-label={`${confirmedCount} of ${totalCards} values confirmed`}
       >
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full bg-primary transition-[width]"
-            style={{ width: `${total ? (confirmedCount / total) * 100 : 0}%` }}
+            style={{ width: `${totalCards ? (confirmedCount / totalCards) * 100 : 0}%` }}
           />
         </div>
       </div>
 
       {/* Sticky preview */}
-      {activeField && (
+      {previewField && activeMerged && (
         <div className="sticky top-[64px] z-20 -mx-4 mb-4 border-b bg-background/95 px-4 py-3 backdrop-blur">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Currently reviewing
           </p>
           <p className="text-sm font-semibold">
-            {activeField.label}{" "}
+            {activeMerged.label}{" "}
             <span className="font-normal text-muted-foreground">
-              — {DOC_LABELS[activeField.sourceDoc]}, page {activeField.sourcePage}
+              — {DOC_LABELS[previewField.sourceDoc]}, page {previewField.sourcePage}
             </span>
           </p>
           <div className="mt-2 max-h-[38vh] overflow-hidden">
-            <DocPreview field={activeField} />
+            <DocPreview field={previewField} />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Yellow box shows where this value was found.
@@ -119,80 +197,84 @@ function ReviewPage() {
         </div>
       )}
 
-      {/* Per-document sections */}
-      <div className="space-y-8">
-        {docs.map((doc) => {
-          const basic = doc.fields.filter((f) => f.category === "basic");
-          const calc = doc.fields.filter((f) => f.category === "calculation");
-          const untrusted = doc.fields.filter((f) => f.category === "untrusted");
-          return (
-            <section key={doc.id} aria-labelledby={`doc-${doc.id}`}>
-              <div className="mb-3">
-                <h2 id={`doc-${doc.id}`} className="text-lg font-semibold">
-                  {DOC_LABELS[doc.type]}
-                </h2>
-                <p className="text-xs text-muted-foreground">{doc.fileName}</p>
-              </div>
-
-              {basic.length > 0 && (
-                <div className="mb-5">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Basic values
-                  </h3>
-                  <div className="space-y-3">
-                    {basic.map((f) => (
-                      <ValueCard
-                        key={f.id}
-                        field={f}
-                        isActive={activeId === f.id}
-                        onActivate={() => setActiveId(f.id)}
-                        onConfirmed={() => handleConfirmed(f)}
-                      />
-                    ))}
-                  </div>
+      {/* Basic values */}
+      {orderedBasic.length > 0 && (
+        <section aria-labelledby="section-basic" className="mb-8">
+          <h2 ref={basicHeader} id="section-basic" className="mb-3 text-lg font-semibold">
+            Basic values
+          </h2>
+          <div className="space-y-3">
+            {orderedBasic.map((m) => {
+              const key = mkKey(m);
+              const src =
+                m.sources.find((s) => s.fieldId === activeSourceByKey[key]) ??
+                [...m.sources].sort((a, b) => b.confidence - a.confidence)[0];
+              const isActive = activeKey === key;
+              return (
+                <div key={key} ref={isActive ? activeCardRef : undefined}>
+                  <MergedValueCard
+                    merged={m}
+                    isActive={isActive}
+                    onActivate={() => setActiveKey(key)}
+                    onConfirmed={() => handleConfirmed(m)}
+                    activeSource={src}
+                    onSourceChange={(s) => handleSourceChange(m, s)}
+                  />
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </section>
+      )}
 
-              {calc.length > 0 && (
-                <div className="mb-5">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Values used for calculation
-                  </h3>
-                  <div className="space-y-3">
-                    {calc.map((f) => (
-                      <ValueCard
-                        key={f.id}
-                        field={f}
-                        isActive={activeId === f.id}
-                        onActivate={() => setActiveId(f.id)}
-                        onConfirmed={() => handleConfirmed(f)}
-                      />
-                    ))}
-                  </div>
+      {/* Calculation values */}
+      {orderedCalc.length > 0 && (
+        <section aria-labelledby="section-calc" className="mb-8">
+          <h2 ref={calcHeader} id="section-calc" className="mb-3 text-lg font-semibold">
+            Values used for calculation
+          </h2>
+          <div className="space-y-3">
+            {orderedCalc.map((m) => {
+              const key = mkKey(m);
+              const src =
+                m.sources.find((s) => s.fieldId === activeSourceByKey[key]) ??
+                [...m.sources].sort((a, b) => b.confidence - a.confidence)[0];
+              const isActive = activeKey === key;
+              return (
+                <div key={key} ref={isActive ? activeCardRef : undefined}>
+                  <MergedValueCard
+                    merged={m}
+                    isActive={isActive}
+                    onActivate={() => setActiveKey(key)}
+                    onConfirmed={() => handleConfirmed(m)}
+                    activeSource={src}
+                    onSourceChange={(s) => handleSourceChange(m, s)}
+                  />
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </section>
+      )}
 
-              {untrusted.length > 0 && (
-                <div className="mb-2">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Safety check
-                  </h3>
-                  <div className="space-y-3">
-                    {untrusted.map((f) => (
-                      <UntrustedCard
-                        key={f.id}
-                        field={f}
-                        isActive={activeId === f.id}
-                        onActivate={() => setActiveId(f.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
+      {/* Safety check — read-only */}
+      {untrusted.length > 0 && (
+        <section aria-labelledby="section-safety" className="mb-8">
+          <h2 id="section-safety" className="mb-3 text-lg font-semibold">
+            Safety check
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Suspicious text was found in your documents. It is shown for
+            transparency only — RentSmooth ignores it entirely. You cannot edit
+            or confirm these items.
+          </p>
+          <div className="space-y-3">
+            {untrusted.map((f) => (
+              <UntrustedCard key={f.id} field={f} isActive={false} onActivate={() => {}} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Continue */}
       <div className="mt-8 border-t pt-5">
@@ -208,9 +290,18 @@ function ReviewPage() {
         >
           {allDone
             ? "Continue to final confirmation"
-            : `Confirm all values to continue (${total - confirmedCount} left)`}
+            : `Confirm all values to continue (${totalCards - confirmedCount} left)`}
         </button>
       </div>
     </PageShell>
   );
+}
+
+function mkKey(m: MergedField) {
+  return `${m.category}::${m.key}`;
+}
+
+function sortByConfirmation(list: MergedField[]): MergedField[] {
+  // unconfirmed first (stable), then confirmed
+  return [...list].sort((a, b) => Number(a.confirmed) - Number(b.confirmed));
 }

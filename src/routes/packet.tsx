@@ -42,10 +42,8 @@ function PacketPage() {
   const [announcement, setAnnouncement] = useState("");
 
   const fields = useMemo(() => allFields(session), [session]);
-  const payField = fields.find((f) => f.label.toLowerCase().includes("pay before"));
-  const amount = payField ? parseAmount(payField.corrected ?? payField.value) : NaN;
-  const mult = frequencyMultiplier(session.frequency);
-  const annual = mult && !Number.isNaN(amount) ? amount * mult : NaN;
+  const income = useMemo(() => computeAnnualIncome(session), [session]);
+  const annual = income.contributions.length > 0 ? income.annual : NaN;
   const belowOrEqual = !Number.isNaN(annual) && annual <= THRESHOLD.amount;
 
   const checklist = CHECKLIST.map((t) => {

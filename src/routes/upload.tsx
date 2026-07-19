@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, Check, FileText, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
@@ -10,7 +10,6 @@ import {
   useSession,
   type DocType,
 } from "@/lib/session-store";
-
 
 export const Route = createFileRoute("/upload")({
   head: () => ({
@@ -25,17 +24,27 @@ export const Route = createFileRoute("/upload")({
   component: UploadPage,
 });
 
-const STEPS: DocType[] = [
-  "application_form",
+type Phase = "application" | "income-choose" | "income-upload";
+
+const INCOME_TYPES: DocType[] = [
   "pay_stub",
   "benefit_letter",
   "employment_letter",
   "gig_statement",
 ];
 
+const HELPER_TEXT: Partial<Record<DocType, string[]>> = {
+  application_form: ["Name", "Household size", "Address"],
+  pay_stub: ["Pay date", "Hours and rate", "Gross and net pay"],
+  benefit_letter: ["Monthly benefit", "Benefit frequency"],
+  employment_letter: ["Weekly hours", "Hourly rate"],
+  gig_statement: ["Statement month", "Gross receipts", "Platform fees"],
+};
+
 function UploadPage() {
   const { session, setSession } = useSession();
-  const [stepIdx, setStepIdx] = useState(0);
+  const [phase, setPhase] = useState<Phase>("application");
+  const [selectedIncome, setSelectedIncome] = useState<DocType | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [oldDatePending, setOldDatePending] = useState<null | {
     docType: DocType;
@@ -45,11 +54,23 @@ function UploadPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const currentType = STEPS[stepIdx];
-  const alreadyDone = useMemo(
-    () => new Set(session.docs.map((d) => d.type)),
+  const currentType: DocType =
+    phase === "application" ? "application_form" : (selectedIncome ?? "pay_stub");
+
+  const addedIncomeTypes = useMemo(
+    () =>
+      new Set(
+        session.docs
+          .filter((d) => INCOME_TYPES.includes(d.type) && d.status !== "skipped")
+          .map((d) => d.type),
+      ),
     [session.docs],
   );
+
+  const hasApplication = session.docs.some(
+    (d) => d.type === "application_form" && d.status !== "skipped",
+  );
+  const hasAnyIncome = addedIncomeTypes.size > 0;
 
   function addDoc(
     type: DocType,
@@ -61,8 +82,6 @@ function UploadPage() {
     setSession((s) => ({
       ...s,
       docs: [
-        // Keep prior docs of this type so users can add multiple (e.g. two pay stubs).
-        // Only replace a prior "skipped" placeholder for this type.
         ...s.docs.filter((d) => !(d.type === type && d.status === "skipped")),
         {
           id,
@@ -76,6 +95,15 @@ function UploadPage() {
     }));
   }
 
+  function advanceAfterAdd() {
+    if (phase === "application") {
+      setPhase("income-choose");
+    } else {
+      // After adding an income doc, go back to the chooser so user can add another or finish.
+      setSelectedIncome(null);
+      setPhase("income-choose");
+    }
+  }
 
   function openFilePicker() {
     fileInputRef.current?.click();
@@ -83,7 +111,6 @@ function UploadPage() {
 
   function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    // Reset so choosing the same file again still fires change.
     e.target.value = "";
     if (files.length === 0) return;
 
@@ -101,7 +128,6 @@ function UploadPage() {
       const date = new Date(file.lastModified).toISOString().slice(0, 10);
 
       if (date < DATE_CUTOFF) {
-        // Queue the first old-dated file for confirmation; skip any others in this batch.
         if (!pendingOld) {
           pendingOld = { docType: currentType, fileName, date };
         }
@@ -111,7 +137,10 @@ function UploadPage() {
       addedCount += 1;
     }
 
-    const sizeMsg = tooLarge > 0 ? ` ${tooLarge} file${tooLarge === 1 ? " was" : "s were"} larger than 20 MB and skipped.` : "";
+    const sizeMsg =
+      tooLarge > 0
+        ? ` ${tooLarge} file${tooLarge === 1 ? " was" : "s were"} larger than 20 MB and skipped.`
+        : "";
 
     if (pendingOld) {
       setOldDatePending(pendingOld);
@@ -123,38 +152,46 @@ function UploadPage() {
 
     if (addedCount > 0) {
       setAnnouncement(
-        `${addedCount} ${DOC_LABELS[currentType]} file${addedCount === 1 ? "" : "s"} added. Moved to next document.${sizeMsg}`,
+        `${addedCount} ${DOC_LABELS[currentType]} file${addedCount === 1 ? "" : "s"} added.${sizeMsg}`,
       );
-      next();
+      advanceAfterAdd();
     } else if (tooLarge > 0) {
       setAnnouncement(`No files added.${sizeMsg}`);
     }
   }
 
-  function skip() {
+  function skipApplication() {
     setSession((s) => ({
       ...s,
       docs: [
-        ...s.docs.filter((d) => d.type !== currentType),
+        ...s.docs.filter((d) => d.type !== "application_form"),
         {
-          id: `${currentType}-skip`,
-          type: currentType,
+          id: "application_form-skip",
+          type: "application_form",
           fileName: "—",
           status: "skipped",
           fields: [],
         },
       ],
     }));
-    setAnnouncement(`Marked ${DOC_LABELS[currentType]} as not available. Moved on.`);
-    next();
+    setAnnouncement("Marked application form as not available. Moving to income.");
+    setPhase("income-choose");
   }
 
-  function next() {
-    if (stepIdx < STEPS.length - 1) setStepIdx(stepIdx + 1);
-  }
-
-  function prev() {
-    if (stepIdx > 0) setStepIdx(stepIdx - 1);
+  function skipAllIncome() {
+    // Mark each income type not yet added as skipped placeholder (only if none uploaded).
+    setSession((s) => {
+      const existing = new Set(s.docs.map((d) => d.type));
+      const additions = INCOME_TYPES.filter((t) => !existing.has(t)).map((t) => ({
+        id: `${t}-skip`,
+        type: t,
+        fileName: "—" as const,
+        status: "skipped" as const,
+        fields: [],
+      }));
+      return { ...s, docs: [...s.docs, ...additions] };
+    });
+    setAnnouncement("Marked no income documents available.");
   }
 
   function deleteDoc(id: string) {
@@ -170,15 +207,18 @@ function UploadPage() {
     }
   }
 
+  const canFinish = hasApplication || hasAnyIncome || session.docs.length > 0;
   const uploadedCount = session.docs.filter((d) => d.status !== "skipped").length;
-  const canFinish = session.docs.length > 0;
+
+  const stepLabel =
+    phase === "application" ? "Step 1 of 2" : "Step 2 of 2";
 
   return (
-    <PageShell title="Add your documents" step={`Step ${stepIdx + 1} of ${STEPS.length}`}>
+    <PageShell title="Build your renter packet" step={stepLabel}>
       <LiveRegion message={announcement} />
 
       <p className="text-sm text-muted-foreground">
-        Add your documents. We'll help you review what we find before anything is used.
+        Add your documents. You can review and change anything before it is used.
       </p>
 
       {/* Progress */}
@@ -186,101 +226,224 @@ function UploadPage() {
         <div
           className="flex gap-1"
           role="progressbar"
-          aria-valuenow={stepIdx + 1}
+          aria-valuenow={phase === "application" ? 1 : 2}
           aria-valuemin={1}
-          aria-valuemax={STEPS.length}
-          aria-label={`Upload progress: step ${stepIdx + 1} of ${STEPS.length}`}
+          aria-valuemax={2}
+          aria-label={`Progress: ${stepLabel}`}
         >
-          {STEPS.map((t, i) => (
-            <div
-              key={t}
-              className={
-                "h-1.5 flex-1 rounded-full " +
-                (i <= stepIdx ? "bg-primary" : "bg-muted")
-              }
-            />
-          ))}
+          <div className="h-1.5 flex-1 rounded-full bg-primary" />
+          <div
+            className={
+              "h-1.5 flex-1 rounded-full " +
+              (phase !== "application" ? "bg-primary" : "bg-muted")
+            }
+          />
         </div>
       </div>
 
-      <section
-        aria-labelledby="current-doc"
-        className="mt-6 rounded-2xl border bg-card p-5 shadow-sm"
-      >
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2 text-primary">
-            <FileText className="h-5 w-5" aria-hidden="true" />
+      {/* STEP 1: Application form */}
+      {phase === "application" && (
+        <section
+          aria-labelledby="app-heading"
+          className="mt-6 rounded-2xl border bg-card p-5 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <h2 id="app-heading" className="text-lg font-semibold">
+                Add application form
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">This helps fill in:</p>
+              <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
+                {HELPER_TEXT.application_form!.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+              {hasApplication && (
+                <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  Already added — you can add more or replace it.
+                </p>
+              )}
+            </div>
           </div>
-          <div className="flex-1">
-            <h2 id="current-doc" className="text-lg font-semibold">
-              {DOC_LABELS[currentType]}
-            </h2>
-            {alreadyDone.has(currentType) && (
-              <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                Already added — you can add more or replace it.
-              </p>
-            )}
-            <p className="mt-1 text-xs text-muted-foreground">
-              You can select more than one file at a time.
-            </p>
-          </div>
-        </div>
 
-        <div className="mt-5 flex flex-col gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf,image/*"
-            multiple
-            className="sr-only"
-            onChange={handleFileChosen}
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-          <button
-            type="button"
-            onClick={openFilePicker}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={`Upload one or more files for ${DOC_LABELS[currentType]}`}
-          >
-            <Upload className="h-4 w-4" aria-hidden="true" />
-            Upload file(s)
-          </button>
-          {session.docs.some(
-            (d) => d.type === currentType && d.status !== "skipped",
-          ) ? (
+          <div className="mt-5 flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,image/*"
+              multiple
+              className="sr-only"
+              onChange={handleFileChosen}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
             <button
               type="button"
-              onClick={next}
-              disabled={stepIdx === STEPS.length - 1}
-              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label={`Keep the ${DOC_LABELS[currentType]} you already added and continue`}
+              onClick={openFilePicker}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              Continue
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              Upload application form
             </button>
-          ) : (
+            {hasApplication ? (
+              <button
+                type="button"
+                onClick={() => setPhase("income-choose")}
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={skipApplication}
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                I do not have this
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* STEP 2a: Choose income doc type */}
+      {phase === "income-choose" && (
+        <section
+          aria-labelledby="income-heading"
+          className="mt-6 rounded-2xl border bg-card p-5 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <h2 id="income-heading" className="text-lg font-semibold">
+                Add income document
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {hasAnyIncome
+                  ? "Add another if you have one, or continue."
+                  : "Choose one you have:"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-2">
+            {INCOME_TYPES.map((t) => {
+              const already = addedIncomeTypes.has(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setSelectedIncome(t);
+                    setPhase("income-upload");
+                  }}
+                  className="inline-flex h-12 w-full items-center justify-between gap-2 rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  aria-label={`Add ${DOC_LABELS[t]}${already ? " (already added — add another)" : ""}`}
+                >
+                  <span>{DOC_LABELS[t]}</span>
+                  {already && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      Added
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {!hasAnyIncome && (
+              <button
+                type="button"
+                onClick={skipAllIncome}
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                I do not have one
+              </button>
+            )}
             <button
               type="button"
-              onClick={skip}
+              onClick={() => setPhase("application")}
               className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label={`I do not have a ${DOC_LABELS[currentType]}`}
             >
-              I do not have this
+              Back to application form
             </button>
-          )}
-          {stepIdx > 0 && (
+          </div>
+        </section>
+      )}
+
+      {/* STEP 2b: Upload chosen income doc */}
+      {phase === "income-upload" && selectedIncome && (
+        <section
+          aria-labelledby="income-upload-heading"
+          className="mt-6 rounded-2xl border bg-card p-5 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <h2 id="income-upload-heading" className="text-lg font-semibold">
+                Add {DOC_LABELS[selectedIncome]}
+              </h2>
+              {HELPER_TEXT[selectedIncome] && (
+                <>
+                  <p className="mt-1 text-sm text-muted-foreground">This helps fill in:</p>
+                  <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
+                    {HELPER_TEXT[selectedIncome]!.map((h) => (
+                      <li key={h}>{h}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                You can select more than one file at a time.
+              </p>
+              {addedIncomeTypes.has(selectedIncome) && (
+                <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  Already added — you can add more or replace it.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,image/*"
+              multiple
+              className="sr-only"
+              onChange={handleFileChosen}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
             <button
               type="button"
-              onClick={prev}
-              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label="Go back to the previous document"
+              onClick={openFilePicker}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              Back to previous document
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              Upload {DOC_LABELS[selectedIncome]}
             </button>
-          )}
-        </div>
-      </section>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIncome(null);
+                setPhase("income-choose");
+              }}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              Choose a different document type
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Doc list summary */}
       {session.docs.length > 0 && (
@@ -329,7 +492,6 @@ function UploadPage() {
                       onClick={() => deleteDoc(d.id)}
                       className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input px-2 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       aria-label={`Delete ${DOC_LABELS[d.type]}`}
-                      title={`Delete ${DOC_LABELS[d.type]}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       Delete
@@ -404,10 +566,10 @@ function UploadPage() {
                     "expired",
                   );
                   setAnnouncement(
-                    `Old document accepted with your permission. Moved to next step.`,
+                    `Old document accepted with your permission.`,
                   );
                   setOldDatePending(null);
-                  next();
+                  advanceAfterAdd();
                 }}
                 className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >

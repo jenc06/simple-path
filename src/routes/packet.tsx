@@ -549,11 +549,11 @@ function PacketPage() {
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          onClick={() => setPreview(true)}
+          onClick={openPdfPreview}
           className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Eye className="h-4 w-4" aria-hidden="true" />
-          Preview packet
+          Preview PDF
         </button>
         <button
           type="button"

@@ -16,9 +16,7 @@ import { Route as PacketRouteImport } from './routes/packet'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as UploadRouteImport } from './routes/upload'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as ApiExtractRouteImport } from './routes/api/extract'
 import { Route as ApiReferenceEvidenceRouteImport } from './routes/api/reference-evidence'
-import { Route as ApiScanRouteImport } from './routes/api/scan'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -55,19 +53,9 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiExtractRoute = ApiExtractRouteImport.update({
-  id: '/api/extract',
-  path: '/api/extract',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiReferenceEvidenceRoute = ApiReferenceEvidenceRouteImport.update({
   id: '/api/reference-evidence',
   path: '/api/reference-evidence',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiScanRoute = ApiScanRouteImport.update({
-  id: '/api/scan',
-  path: '/api/scan',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -79,9 +67,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof ReviewRoute
   '/upload': typeof UploadRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/extract': typeof ApiExtractRoute
   '/api/reference-evidence': typeof ApiReferenceEvidenceRoute
-  '/api/scan': typeof ApiScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -91,9 +77,7 @@ export interface FileRoutesByTo {
   '/review': typeof ReviewRoute
   '/upload': typeof UploadRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/extract': typeof ApiExtractRoute
   '/api/reference-evidence': typeof ApiReferenceEvidenceRoute
-  '/api/scan': typeof ApiScanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -104,9 +88,7 @@ export interface FileRoutesById {
   '/review': typeof ReviewRoute
   '/upload': typeof UploadRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/extract': typeof ApiExtractRoute
   '/api/reference-evidence': typeof ApiReferenceEvidenceRoute
-  '/api/scan': typeof ApiScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -118,9 +100,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/upload'
     | '/api/chat'
-    | '/api/extract'
     | '/api/reference-evidence'
-    | '/api/scan'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -130,9 +110,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/upload'
     | '/api/chat'
-    | '/api/extract'
     | '/api/reference-evidence'
-    | '/api/scan'
   id:
     | '__root__'
     | '/'
@@ -142,9 +120,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/upload'
     | '/api/chat'
-    | '/api/extract'
     | '/api/reference-evidence'
-    | '/api/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -155,9 +131,7 @@ export interface RootRouteChildren {
   ReviewRoute: typeof ReviewRoute
   UploadRoute: typeof UploadRoute
   ApiChatRoute: typeof ApiChatRoute
-  ApiExtractRoute: typeof ApiExtractRoute
   ApiReferenceEvidenceRoute: typeof ApiReferenceEvidenceRoute
-  ApiScanRoute: typeof ApiScanRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -211,25 +185,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/extract': {
-      id: '/api/extract'
-      path: '/api/extract'
-      fullPath: '/api/extract'
-      preLoaderRoute: typeof ApiExtractRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/reference-evidence': {
       id: '/api/reference-evidence'
       path: '/api/reference-evidence'
       fullPath: '/api/reference-evidence'
       preLoaderRoute: typeof ApiReferenceEvidenceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/scan': {
-      id: '/api/scan'
-      path: '/api/scan'
-      fullPath: '/api/scan'
-      preLoaderRoute: typeof ApiScanRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -243,9 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewRoute: ReviewRoute,
   UploadRoute: UploadRoute,
   ApiChatRoute: ApiChatRoute,
-  ApiExtractRoute: ApiExtractRoute,
   ApiReferenceEvidenceRoute: ApiReferenceEvidenceRoute,
-  ApiScanRoute: ApiScanRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

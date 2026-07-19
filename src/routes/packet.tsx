@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Download, Eye, Trash2, X } from "lucide-react";
+import { Check, Download, Eye, FileText, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import jsPDF from "jspdf";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import {
   DOC_LABELS,
@@ -12,6 +13,7 @@ import {
   useSession,
   type DocType,
 } from "@/lib/session-store";
+
 
 export const Route = createFileRoute("/packet")({
   head: () => ({

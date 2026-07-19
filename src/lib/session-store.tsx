@@ -71,8 +71,43 @@ interface Ctx {
 
 const SessionCtx = createContext<Ctx | null>(null);
 
+const STORAGE_KEY = "rentsmooth.session.v1";
+
+function loadPersisted(): SessionState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SessionState;
+    if (!parsed || !Array.isArray(parsed.docs)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [session, setSessionState] = useState<SessionState>(initialSample);
+  const [session, setSessionState] = useState<SessionState>(
+    () => loadPersisted() ?? initialSample(),
+  );
+
+  // Persist to sessionStorage on every change so navigating between pages
+  // (or an accidental refresh within the tab) keeps the user's progress.
+  // Ephemeral by design: sessionStorage is cleared when the tab closes,
+  // matching the privacy rule that session data must not linger.
+  const skipFirst = useRef(true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    } catch {
+      // storage unavailable / quota — silently ignore; state stays in memory.
+    }
+  }, [session]);
 
   const value = useMemo<Ctx>(
     () => ({
@@ -88,20 +123,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             ),
           })),
         })),
-      resetSession: () => setSessionState(initialSample()),
-      deleteSession: () =>
+      resetSession: () => {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem(STORAGE_KEY);
+        }
+        setSessionState(initialSample());
+      },
+      deleteSession: () => {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem(STORAGE_KEY);
+        }
         setSessionState({
           startedAt: new Date().toISOString(),
           frequency: "unknown",
           householdSize: 1,
           docs: [],
-        }),
+        });
+      },
     }),
     [session],
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;
 }
+
 
 export function useSession() {
   const ctx = useContext(SessionCtx);

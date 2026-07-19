@@ -1076,21 +1076,8 @@ function PacketPage() {
     setAnnouncement("Source details are ready to review.");
   }
 
-  function deletePacket() {
-    setSession((s) => ({
-      ...s,
-      docs: [],
-      incomeSourceReviews: [],
-      packetGeneratedAt: undefined,
-    }));
-    recordAudit("packet_delete", { route: "/packet", status: "deleted" });
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    setPreview(false);
-    setAnnouncement("Packet deleted. Your session is empty.");
-  }
+
+
 
   return (
     <PageShell title="Your packet" step="Ready to share">

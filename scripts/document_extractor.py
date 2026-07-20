@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
 import os
@@ -233,11 +234,16 @@ def preview_pages(path, page_numbers):
     with tempfile.TemporaryDirectory(prefix="rentsmooth_preview_") as tmpdir:
         if is_pdf(path):
             total = page_count(path)
-            for page in wanted:
-                if page > total:
-                    continue
-                image_path = render_pdf_page(path, page - 1, tmpdir)
-                pages[str(page)] = image_data_url(image_path)
+            valid = [p for p in wanted if p <= total]
+
+            def _render(page):
+                return str(page), image_data_url(render_pdf_page(path, page - 1, tmpdir))
+
+            with ThreadPoolExecutor(max_workers=min(len(valid), 4)) as executor:
+                futures = {executor.submit(_render, p): p for p in valid}
+                for future in as_completed(futures):
+                    key, url = future.result()
+                    pages[key] = url
         else:
             pages["1"] = image_data_url(path)
     return pages
@@ -324,24 +330,43 @@ def page_count(path):
         return len(pdf.pages)
 
 
+def _process_pdf_page(path, page_index, force_ocr, tmpdir):
+    """Process one PDF page; returns (page_blocks, page_warnings)."""
+    page_blocks = [] if force_ocr else extract_pdf_text_page(path, page_index)
+    useful_text = " ".join(b["text"] for b in page_blocks)
+    page_warnings = []
+    if len(useful_text) < 25:
+        try:
+            image_path = render_pdf_page(path, page_index, tmpdir)
+            page_blocks = ocr_image_blocks(image_path, page_index + 1)
+            page_warnings.append("OCR fallback used for at least one page.")
+        except Exception:
+            page_blocks = []
+            page_warnings.append("OCR fallback failed for at least one page.")
+    return page_blocks, page_warnings
+
+
 def extract_blocks(path, first_page_only=False, force_ocr=False):
     warnings = []
     blocks = []
     pages = 1 if first_page_only else page_count(path)
     with tempfile.TemporaryDirectory(prefix="rentsmooth_ocr_") as tmpdir:
         if is_pdf(path):
-            for page_index in range(pages):
-                page_blocks = [] if force_ocr else extract_pdf_text_page(path, page_index)
-                useful_text = " ".join(b["text"] for b in page_blocks)
-                if len(useful_text) < 25:
-                    try:
-                        image_path = render_pdf_page(path, page_index, tmpdir)
-                        page_blocks = ocr_image_blocks(image_path, page_index + 1)
-                        warnings.append("OCR fallback used for at least one page.")
-                    except Exception:
-                        page_blocks = []
-                        warnings.append("OCR fallback failed for at least one page.")
+            if pages <= 1:
+                page_blocks, page_warnings = _process_pdf_page(path, 0, force_ocr, tmpdir)
                 blocks.extend(page_blocks)
+                warnings.extend(page_warnings)
+            else:
+                with ThreadPoolExecutor(max_workers=min(pages, 4)) as executor:
+                    futures = {executor.submit(_process_pdf_page, path, i, force_ocr, tmpdir): i for i in range(pages)}
+                    page_results = {}
+                    for future in as_completed(futures):
+                        idx = futures[future]
+                        page_results[idx] = future.result()
+                for i in range(pages):
+                    pb, pw = page_results[i]
+                    blocks.extend(pb)
+                    warnings.extend(pw)
         else:
             blocks = ocr_image_blocks(path, 1)
             warnings.append("Image upload processed with OCR fallback.")
@@ -782,7 +807,7 @@ def scan(path, selected):
     }
 
 
-def extract(path, final_type, doc_id, scan_result, skip_preview=False):
+def extract(path, final_type, doc_id, scan_result, skip_preview=False, skip_ocr_fallback=False):
     blocks, warnings = extract_blocks(path, first_page_only=False)
     document_date = scan_result.get("documentDate")
     if not document_date:
@@ -790,7 +815,7 @@ def extract(path, final_type, doc_id, scan_result, skip_preview=False):
     fields = extract_fields(blocks, final_type, doc_id, document_date)
     required = set(FIELD_META[final_type])
     found = {field["key"] for field in fields if field.get("category") != "untrusted"}
-    if is_pdf(path) and not required.issubset(found):
+    if is_pdf(path) and not required.issubset(found) and not skip_ocr_fallback:
         ocr_blocks, ocr_warnings = extract_blocks(path, first_page_only=False, force_ocr=True)
         ocr_fields = extract_fields(ocr_blocks, final_type, doc_id, document_date)
         ocr_found = {field["key"] for field in ocr_fields if field.get("category") != "untrusted"}

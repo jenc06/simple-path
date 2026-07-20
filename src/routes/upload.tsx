@@ -548,9 +548,60 @@ function UploadPage() {
               {isExtracting ? loadingStage || "Reading document…" : "Upload application form"}
             </button>
             {isExtracting && (
-              <p id="application-upload-not-allowed" className="text-xs font-medium text-amber-800">
-                Not allowed yet: wait for the current document to finish reading.
-              </p>
+              <div
+                id="application-upload-not-allowed"
+                role="status"
+                aria-live="polite"
+                aria-label={loadingStage || "Processing document"}
+                className="rounded-xl border border-primary/20 bg-primary/5 p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <svg
+                    className="h-5 w-5 animate-spin text-primary"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-foreground">
+                    {loadingStage || "Processing…"}
+                  </span>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  {(["Uploading document…", "Extracting fields…", "Loading preview…"] as const).map(
+                    (stage, i) => {
+                      const stageOrder = [
+                        "Uploading document…",
+                        "Extracting fields…",
+                        "Loading preview…",
+                      ];
+                      const currentIdx = stageOrder.indexOf(loadingStage);
+                      const done = currentIdx > i;
+                      const active = currentIdx === i;
+                      return (
+                        <div
+                          key={stage}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${done ? "bg-primary" : active ? "animate-pulse bg-primary/60" : "bg-muted"}`}
+                        />
+                      );
+                    },
+                  )}
+                </div>
+              </div>
             )}
             {hasApplication ? (
               <button
@@ -710,9 +761,60 @@ function UploadPage() {
                 : `Upload ${DOC_LABELS[selectedIncome]}`}
             </button>
             {isExtracting && (
-              <p id="income-upload-not-allowed" className="text-xs font-medium text-amber-800">
-                Not allowed yet: wait for the current document to finish reading.
-              </p>
+              <div
+                id="income-upload-not-allowed"
+                role="status"
+                aria-live="polite"
+                aria-label={loadingStage || "Processing document"}
+                className="rounded-xl border border-primary/20 bg-primary/5 p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <svg
+                    className="h-5 w-5 animate-spin text-primary"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-foreground">
+                    {loadingStage || "Processing…"}
+                  </span>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  {(["Uploading document…", "Extracting fields…", "Loading preview…"] as const).map(
+                    (stage, i) => {
+                      const stageOrder = [
+                        "Uploading document…",
+                        "Extracting fields…",
+                        "Loading preview…",
+                      ];
+                      const currentIdx = stageOrder.indexOf(loadingStage);
+                      const done = currentIdx > i;
+                      const active = currentIdx === i;
+                      return (
+                        <div
+                          key={stage}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${done ? "bg-primary" : active ? "animate-pulse bg-primary/60" : "bg-muted"}`}
+                        />
+                      );
+                    },
+                  )}
+                </div>
+              </div>
             )}
             <button
               type="button"

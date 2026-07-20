@@ -782,7 +782,7 @@ def scan(path, selected):
     }
 
 
-def extract(path, final_type, doc_id, scan_result):
+def extract(path, final_type, doc_id, scan_result, skip_preview=False):
     blocks, warnings = extract_blocks(path, first_page_only=False)
     document_date = scan_result.get("documentDate")
     if not document_date:
@@ -803,7 +803,7 @@ def extract(path, final_type, doc_id, scan_result):
         "documentDate": document_date,
         "fields": fields,
         "evidenceChunks": evidence_chunks(blocks, doc_id),
-        "previewPages": preview_pages(path, pages_with_fields),
+        "previewPages": {} if skip_preview else preview_pages(path, pages_with_fields),
         "warnings": sorted(set([*scan_result.get("warnings", []), *warnings])),
     }
 

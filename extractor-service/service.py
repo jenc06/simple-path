@@ -83,7 +83,7 @@ async def scan_and_extract_upload(
     path = await write_temp_upload(file)
     try:
         scan_result = scan(path, selectedDocType)
-        extraction_result = extract(path, selectedDocType, docId, scan_result)
+        extraction_result = extract(path, selectedDocType, docId, scan_result, skip_preview=True)
         return {"scan": scan_result, "extraction": extraction_result}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not process uploaded document: {exc}") from exc

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
 import {
   extractDocumentFields,
+  fetchDocumentPreview,
   scanAndExtractDocument,
   scanDocument,
   type ExtractionResult,
@@ -78,6 +79,7 @@ function UploadPage() {
     scan: ScanResult;
   }>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<string>("");
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -259,7 +261,8 @@ function UploadPage() {
     let pendingMismatch = false;
 
     setIsExtracting(true);
-    setAnnouncement("Reading document. We will ask you to review what we find.");
+    setLoadingStage("Uploading document…");
+    setAnnouncement("Uploading document. Please wait.");
 
     try {
       for (const file of files) {
@@ -269,6 +272,8 @@ function UploadPage() {
         }
         const fileName = file.name;
         const id = `${currentType}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        setLoadingStage("Extracting fields…");
+        setAnnouncement("Identifying document type and extracting fields.");
         const { scan, extraction: preExtraction } = await scanAndExtractDocument(
           file,
           currentType,
@@ -303,6 +308,23 @@ function UploadPage() {
           preExtraction,
         });
         result.warnings.forEach((warning) => warnings.add(warning));
+        if (result.status === "added" && preExtraction) {
+          const pageNumbers = [
+            ...new Set(preExtraction.fields.map((f) => f.sourcePage).filter((p) => p > 0)),
+          ];
+          if (pageNumbers.length > 0) {
+            setLoadingStage("Loading preview…");
+            fetchDocumentPreview(file, pageNumbers).then((previewPages) => {
+              if (Object.keys(previewPages).length > 0) {
+                setSession((s) => ({
+                  ...s,
+                  docs: s.docs.map((d) => (d.id === id ? { ...d, previewPages } : d)),
+                }));
+              }
+              setLoadingStage("");
+            });
+          }
+        }
         if (result.status === "added") addedCount += 1;
         if (result.status === "old_pending") {
           pendingOld = true;
@@ -310,6 +332,7 @@ function UploadPage() {
         }
       }
     } catch (error) {
+      setLoadingStage("");
       setAnnouncement(extractionFailureMessage(error));
       return;
     } finally {
@@ -522,7 +545,7 @@ function UploadPage() {
               aria-describedby={isExtracting ? "application-upload-not-allowed" : undefined}
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
-              {isExtracting ? "Not allowed - reading document" : "Upload application form"}
+              {isExtracting ? loadingStage || "Reading document…" : "Upload application form"}
             </button>
             {isExtracting && (
               <p id="application-upload-not-allowed" className="text-xs font-medium text-amber-800">
@@ -683,7 +706,7 @@ function UploadPage() {
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
               {isExtracting
-                ? "Not allowed - reading document"
+                ? loadingStage || "Reading document…"
                 : `Upload ${DOC_LABELS[selectedIncome]}`}
             </button>
             {isExtracting && (

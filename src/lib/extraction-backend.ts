@@ -68,6 +68,24 @@ export interface ScanResult {
   warnings: string[];
 }
 
+export async function fetchDocumentPreview(
+  file: File,
+  pageNumbers: number[],
+): Promise<Record<number, string>> {
+  if (typeof window === "undefined" || pageNumbers.length === 0) return {};
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("pages", JSON.stringify(pageNumbers));
+    const response = await fetch("/api/preview", { method: "POST", body: form });
+    if (!response.ok) return {};
+    const result = (await response.json()) as { previewPages?: Record<string, string> };
+    return normalizePreviewPages(result.previewPages);
+  } catch {
+    return {};
+  }
+}
+
 export async function scanAndExtractDocument(
   file: File,
   selectedDocType: DocType,

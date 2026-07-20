@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from document_extractor import DOC_TYPES, extract, scan
+from document_extractor import DOC_TYPES, extract, preview_pages, scan
 
 
 app = FastAPI(title="SimplePath PDF Extractor")
@@ -70,6 +70,25 @@ async def extract_upload(
         path.unlink(missing_ok=True)
 
 
+@app.post("/preview")
+async def preview_upload(
+    file: Annotated[UploadFile, File()],
+    pages: Annotated[str, Form()],
+):
+    try:
+        page_numbers = json.loads(pages)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid pages format.")
+    path = await write_temp_upload(file)
+    try:
+        result = preview_pages(path, page_numbers)
+        return {"previewPages": result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not generate preview: {exc}") from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+
 @app.post("/scan-and-extract")
 async def scan_and_extract_upload(
     file: Annotated[UploadFile, File()],
@@ -83,7 +102,7 @@ async def scan_and_extract_upload(
     path = await write_temp_upload(file)
     try:
         scan_result = scan(path, selectedDocType)
-        extraction_result = extract(path, selectedDocType, docId, scan_result, skip_ocr_fallback=True)
+        extraction_result = extract(path, selectedDocType, docId, scan_result, skip_preview=True, skip_ocr_fallback=True)
         return {"scan": scan_result, "extraction": extraction_result}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not process uploaded document: {exc}") from exc

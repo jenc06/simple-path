@@ -17,6 +17,27 @@ const PYTHON_BIN =
 const EXTRACTOR = path.resolve(process.cwd(), "scripts/document_extractor.py");
 const EXTRACTOR_SERVICE_URL = process.env.EXTRACTOR_SERVICE_URL?.replace(/\/+$/, "");
 
+export async function fetchDocumentPreview(
+  file: File,
+  pageNumbers: number[],
+): Promise<Record<number, string>> {
+  if (!EXTRACTOR_SERVICE_URL) return {};
+  try {
+    const payload = await callExtractorService("/preview", [
+      ["file", file],
+      ["pages", JSON.stringify(pageNumbers)],
+    ]);
+    const result = payload as { previewPages?: Record<string, string> };
+    return Object.fromEntries(
+      Object.entries(result.previewPages ?? {})
+        .map(([k, v]) => [Number(k), v] as const)
+        .filter(([k, v]) => Number.isInteger(k) && k > 0 && typeof v === "string" && v.length > 0),
+    );
+  } catch {
+    return {};
+  }
+}
+
 export async function scanAndExtractUploadedDocument(
   file: File,
   selectedDocType: DocType,

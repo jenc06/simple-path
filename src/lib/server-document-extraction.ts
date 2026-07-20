@@ -17,6 +17,43 @@ const PYTHON_BIN =
 const EXTRACTOR = path.resolve(process.cwd(), "scripts/document_extractor.py");
 const EXTRACTOR_SERVICE_URL = process.env.EXTRACTOR_SERVICE_URL?.replace(/\/+$/, "");
 
+export async function scanAndExtractUploadedDocument(
+  file: File,
+  selectedDocType: DocType,
+  docId: string,
+): Promise<{ scan: ScanResult; extraction: ExtractionResult }> {
+  if (EXTRACTOR_SERVICE_URL) {
+    const payload = await callExtractorService("/scan-and-extract", [
+      ["file", file],
+      ["selectedDocType", selectedDocType],
+      ["docId", docId],
+    ]);
+    return payload as { scan: ScanResult; extraction: ExtractionResult };
+  }
+
+  return withTempUpload(file, async (filePath) => {
+    const scanResult = (await runExtractor([
+      "scan",
+      "--file",
+      filePath,
+      "--selected",
+      selectedDocType,
+    ])) as ScanResult;
+    const extractResult = (await runExtractor([
+      "extract",
+      "--file",
+      filePath,
+      "--final",
+      scanResult.detectedDocType,
+      "--doc-id",
+      docId,
+      "--scan-json",
+      JSON.stringify(scanResult),
+    ])) as ExtractionResult;
+    return { scan: scanResult, extraction: extractResult };
+  });
+}
+
 export async function scanUploadedDocument(
   file: File,
   selectedDocType: DocType,

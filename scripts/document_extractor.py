@@ -198,7 +198,7 @@ def extract_pdf_text_page(path, page_index):
 def render_pdf_page(path, page_index, tmpdir):
     prefix = str(Path(tmpdir) / f"page_{page_index + 1}")
     subprocess.run(
-        ["pdftoppm", "-f", str(page_index + 1), "-l", str(page_index + 1), "-r", "200", "-png", str(path), prefix],
+        ["pdftoppm", "-f", str(page_index + 1), "-l", str(page_index + 1), "-r", "120", "-png", str(path), prefix],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

@@ -1,8 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, Check, FileText, Trash2, Upload } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageShell, LiveRegion } from "@/components/page-shell";
-import { extractDocumentFields, scanDocument, type ScanResult } from "@/lib/extraction-backend";
+import {
+  extractDocumentFields,
+  scanAndExtractDocument,
+  scanDocument,
+  type ExtractionResult,
+  type ScanResult,
+} from "@/lib/extraction-backend";
 import {
   DATE_CUTOFF,
   DOCUMENT_AGE_LIMIT_DAYS,
@@ -74,6 +80,10 @@ function UploadPage() {
   const [isExtracting, setIsExtracting] = useState(false);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/warmup").catch(() => {});
+  }, []);
 
   const currentType: DocType =
     phase === "application" ? "application_form" : (selectedIncome ?? "pay_stub");
@@ -155,6 +165,7 @@ function UploadPage() {
     finalDocType,
     scan,
     mismatchWarning,
+    preExtraction,
   }: {
     docId: string;
     file: File;
@@ -162,13 +173,16 @@ function UploadPage() {
     finalDocType: DocType;
     scan: ScanResult;
     mismatchWarning?: string;
+    preExtraction?: ExtractionResult;
   }): Promise<{ status: "added" | "old_pending"; warnings: string[] }> {
-    const extraction = await extractDocumentFields({
-      finalDocType,
-      docId,
-      file,
-      scan,
-    });
+    const extraction =
+      preExtraction ??
+      (await extractDocumentFields({
+        finalDocType,
+        docId,
+        file,
+        scan,
+      }));
     recordAudit("document_extract", {
       route: "/upload",
       docType: finalDocType,
@@ -255,7 +269,11 @@ function UploadPage() {
         }
         const fileName = file.name;
         const id = `${currentType}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        const scan = await scanDocument(file, currentType);
+        const { scan, extraction: preExtraction } = await scanAndExtractDocument(
+          file,
+          currentType,
+          id,
+        );
         recordAudit("document_scan", {
           route: "/upload",
           docType: currentType,
@@ -282,6 +300,7 @@ function UploadPage() {
           fileName,
           finalDocType: currentType,
           scan,
+          preExtraction,
         });
         result.warnings.forEach((warning) => warnings.add(warning));
         if (result.status === "added") addedCount += 1;
@@ -494,7 +513,11 @@ function UploadPage() {
               type="button"
               onClick={openFilePicker}
               disabled={isExtracting}
-              title={isExtracting ? "Not allowed — a document is currently being read. Please wait." : undefined}
+              title={
+                isExtracting
+                  ? "Not allowed — a document is currently being read. Please wait."
+                  : undefined
+              }
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               aria-describedby={isExtracting ? "application-upload-not-allowed" : undefined}
             >
@@ -650,7 +673,11 @@ function UploadPage() {
               type="button"
               onClick={openFilePicker}
               disabled={isExtracting}
-              title={isExtracting ? "Not allowed — a document is currently being read. Please wait." : undefined}
+              title={
+                isExtracting
+                  ? "Not allowed — a document is currently being read. Please wait."
+                  : undefined
+              }
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               aria-describedby={isExtracting ? "income-upload-not-allowed" : undefined}
             >
@@ -770,7 +797,6 @@ function UploadPage() {
           before {TODAY}). If a file is older, we'll ask before using it.
         </p>
       </div>
-
 
       {mismatchPending && (
         <div

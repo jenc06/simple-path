@@ -70,6 +70,27 @@ async def extract_upload(
         path.unlink(missing_ok=True)
 
 
+@app.post("/scan-and-extract")
+async def scan_and_extract_upload(
+    file: Annotated[UploadFile, File()],
+    selectedDocType: Annotated[str, Form()],
+    docId: Annotated[str, Form()],
+):
+    if selectedDocType not in DOC_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported selected document type.")
+    if not docId:
+        raise HTTPException(status_code=400, detail="Missing document id.")
+    path = await write_temp_upload(file)
+    try:
+        scan_result = scan(path, selectedDocType)
+        extraction_result = extract(path, selectedDocType, docId, scan_result)
+        return {"scan": scan_result, "extraction": extraction_result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not process uploaded document: {exc}") from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+
 async def write_temp_upload(file: UploadFile) -> Path:
     suffix = safe_suffix(file.filename or "")
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:

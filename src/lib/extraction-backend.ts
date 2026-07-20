@@ -68,6 +68,59 @@ export interface ScanResult {
   warnings: string[];
 }
 
+export async function scanAndExtractDocument(
+  file: File,
+  selectedDocType: DocType,
+  docId: string,
+): Promise<{ scan: ScanResult; extraction: ExtractionResult }> {
+  if (typeof window !== "undefined") {
+    return scanAndExtractViaServer(file, selectedDocType, docId);
+  }
+  // SSR path — shouldn't normally be reached
+  const scan = await scanDocument(file, selectedDocType);
+  const extraction = await extractDocumentFields({
+    finalDocType: selectedDocType,
+    docId,
+    file,
+    scan,
+  });
+  return { scan, extraction };
+}
+
+async function scanAndExtractViaServer(
+  file: File,
+  selectedDocType: DocType,
+  docId: string,
+): Promise<{ scan: ScanResult; extraction: ExtractionResult }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("selectedDocType", selectedDocType);
+  form.append("docId", docId);
+  const response = await fetch("/api/scan-and-extract", {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(await extractionErrorMessage(response, "Document extraction is unavailable."));
+  }
+  const result = (await response.json()) as { scan: ScanResult; extraction: ExtractionResult };
+  return {
+    scan: result.scan,
+    extraction: {
+      ...result.extraction,
+      fields: validateExtractedFields(
+        result.extraction.finalDocType,
+        result.extraction.fields ?? [],
+      ),
+      evidenceChunks: validateEvidenceChunks(result.extraction.evidenceChunks ?? []),
+      previewPages: normalizePreviewPages(result.extraction.previewPages),
+      warnings: Array.isArray(result.extraction.warnings)
+        ? result.extraction.warnings.map(String)
+        : [],
+    },
+  };
+}
+
 export async function scanDocument(file: File, selectedDocType: DocType): Promise<ScanResult> {
   if (typeof window !== "undefined") {
     return scanViaServer(file, selectedDocType);
